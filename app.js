@@ -39,6 +39,11 @@ const state = {
     { from: 'Teacher', text: 'Nicholas, can you show the electron flow again?' },
     { from: 'Catherine', text: 'Nicholas, can you show the electron flow again?' },
   ],
+  teamMembers: [
+    { name: 'Nicholas',  role: 'Me', status: 'online',  initial: 'N', badge: null,     self: true  },
+    { name: 'Catherine', role: '',   status: 'online',  initial: 'C', badge: null,     self: false },
+    { name: 'Jack',      role: '',   status: 'offline', initial: 'J', badge: 'remote', self: false },
+  ],
 };
 
 /* ══ Router ═════════════════════════════════════════════════════════════ */
@@ -195,21 +200,17 @@ function escapeAttr(value) {
 }
 
 function teamSidebarHTML() {
-  const members = [
-    { name: 'Nicholas', role: 'Me', status: 'online',  initial: 'N', badge: null },
-    { name: 'Catherine', role: '',  status: 'online',  initial: 'C', badge: null },
-    { name: 'Jack',      role: '',  status: 'offline', initial: 'J', badge: 'remote' },
-  ];
+  const members = state.teamMembers;
   return `
   <div class="sidebar-section">
     <div class="sidebar-section-title">Team Status</div>
     <div class="team-status-card">
       <div class="team-status-header">
         Project Group 4
-        <span class="badge badge-info">3</span>
+        <span class="badge badge-info">${members.length}</span>
       </div>
       <div class="team-member-list">
-        ${members.map(m => `
+        ${members.map((m, i) => `
           <div class="team-member">
             <div class="team-member-avatar">
               ${m.initial}
@@ -220,6 +221,10 @@ function teamSidebarHTML() {
               <div class="team-member-role">${m.status === 'online' ? 'Online' : 'Offline'}</div>
             </div>
             ${m.badge ? `<span class="team-member-badge">${m.badge}</span>` : ''}
+            ${m.self ? '' : `
+              <button class="team-member-remove" title="Remove ${escapeHTML(m.name)}"
+                      onclick="removeTeamMember(${i})">×</button>
+            `}
           </div>
         `).join('')}
       </div>
@@ -1924,6 +1929,16 @@ function sendInvite() {
   if (!email) { showToast('Enter an email address', 'warning'); return; }
   closeModal();
   showToast('Invitation sent to ' + email, 'success');
+}
+
+/* ── Team management ── */
+function removeTeamMember(idx) {
+  const m = state.teamMembers[idx];
+  if (!m || m.self) return;
+  if (!confirm(`Remove ${m.name} from Project Group 4?`)) return;
+  state.teamMembers.splice(idx, 1);
+  navigate(state.page);
+  showToast(`${m.name} removed from the group`, 'info');
 }
 
 /* ── Presentation ── */
