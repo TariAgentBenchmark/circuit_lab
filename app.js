@@ -69,6 +69,7 @@ function navTabForPage(page) {
   if (page === 'dashboard' || page === 'welcome') return 'home';
   if (page === 'reference' || page === 'lesson') return 'lessons';
   if (page === 'simulation' || page === 'simulation-advanced' || page === 'presentation') return 'lab';
+  if (page === 'about') return 'about';
   return state.activeNavTab;
 }
 
@@ -115,10 +116,29 @@ function renderPage(page) {
 /* ══ Shared helpers ═════════════════════════════════════════════════════ */
 function navHTML(active) {
   const tabs = [
-    { id: 'home',    label: 'Home',    page: 'dashboard' },
-    { id: 'lessons', label: 'Lessons', page: 'reference' },
-    { id: 'lab',     label: 'Lab',     page: 'simulation' },
+    { id: 'home',    label: 'Home',    page: 'dashboard', items: [
+      { label: 'Dashboard',   page: 'dashboard' },
+      { label: 'Welcome',     page: 'welcome'   },
+    ]},
+    { id: 'lessons', label: 'Lessons', page: 'reference', items:
+      REF_LESSONS.map(l => ({
+        label: `Lesson ${l.num} · ${l.title}`,
+        page:  'lesson',
+      })).concat([{ label: 'View all lessons', page: 'reference' }])
+    },
+    { id: 'lab',     label: 'Lab',     page: 'simulation', items: [
+      { label: 'Simulation Lab', page: 'simulation'          },
+      { label: 'Advanced Mode',  page: 'simulation-advanced' },
+      { label: 'Presentation',   page: 'presentation'        },
+    ]},
+    { id: 'about',   label: 'About',   page: 'about', items: [
+      { label: 'About Circuit Lab', page: 'about' },
+    ]},
   ];
+  const itemHTML = (it) => `
+    <a class="nav-dropdown-item"
+       onclick="navigate('${it.page}',{activeNavTab:'${navTabForPage(it.page)}'})"
+       href="javascript:void(0)">${it.label}</a>`;
   return `
   <header class="app-header">
     <div class="header-logo">
@@ -129,9 +149,17 @@ function navHTML(active) {
     </div>
     <nav class="main-nav">
       ${tabs.map(t => `
-        <a class="nav-link ${active === t.id ? 'active' : ''}"
-           onclick="navigate('${t.page}',{activeNavTab:'${t.id}'})"
-           href="javascript:void(0)">${t.label}</a>
+        <div class="nav-item">
+          <a class="nav-link ${active === t.id ? 'active' : ''}"
+             onclick="navigate('${t.page}',{activeNavTab:'${t.id}'})"
+             href="javascript:void(0)">
+            ${t.label}
+            <span class="nav-caret">▾</span>
+          </a>
+          <div class="nav-dropdown">
+            ${t.items.map(itemHTML).join('')}
+          </div>
+        </div>
       `).join('')}
     </nav>
     <div class="header-right">
@@ -806,7 +834,7 @@ function renderLesson() {
         </a>
       </div>
       <nav class="main-nav">
-        ${['home','lessons','lab'].map(t => `
+        ${['home','lessons','lab','about'].map(t => `
           <a class="nav-link ${state.activeNavTab===t?'active':''}"
              onclick="navigate('${t==='home'?'dashboard':t==='lessons'?'reference':t==='lab'?'simulation':t}',{activeNavTab:'${t}'})"
              href="javascript:void(0)">${t.charAt(0).toUpperCase()+t.slice(1)}</a>
@@ -878,7 +906,7 @@ function renderSimulation() {
         <div class="sim-project-title">Project: <span>Simple Switch Circuit</span></div>
       </div>
       <nav class="sim-header-center">
-        ${['home','lessons','lab'].map(t => `
+        ${['home','lessons','lab','about'].map(t => `
           <a class="nav-link ${t==='lab'?'active':''}"
              onclick="navigate('${t==='home'?'dashboard':t==='lessons'?'reference':t==='lab'?'simulation':t}',{activeNavTab:'${t}'})"
              href="javascript:void(0)" style="font-size:.83rem;padding:5px 12px">${t.charAt(0).toUpperCase()+t.slice(1)}</a>
@@ -930,9 +958,6 @@ function renderSimulation() {
                   title="Click two terminals to connect them">
             ${svgIcon('zap',14)} Wire
           </button>
-          <button class="btn btn-ghost btn-sm" onclick="CircuitSim.reset()" title="Reset circuit">
-            Reset
-          </button>
           <span style="margin-left:auto;font-size:.75rem;color:var(--text-muted)">
             Drag components • Click switch to toggle • Double-click wire to delete
           </span>
@@ -942,20 +967,25 @@ function renderSimulation() {
         </div>
       </div>
 
-      <!-- Stats panel -->
+      <!-- Task panel -->
       <div class="stats-panel">
-        <div class="stats-panel-title">Live Stats</div>
-        <div class="stat-block">
-          <div class="stat-label">Voltage Output</div>
-          <div><span class="stat-value" id="stat-voltage">9.0</span> <span class="stat-unit">V</span></div>
-        </div>
-        <div class="stat-block">
-          <div class="stat-label">Current</div>
-          <div><span class="stat-value" id="stat-current">0.00</span> <span class="stat-unit">A</span></div>
-          <div class="stat-status-row">
-            <span class="status-dot offline" id="stat-dot"></span>
-            <span id="stat-status">Open circuit</span>
+        <div class="stats-panel-title">Lesson Task</div>
+        <div class="task-brief">
+          <div class="task-brief-meta">
+            <span class="badge badge-info">Lesson 04</span>
+            <span class="badge badge-gray">Beginner</span>
           </div>
+          <h4 class="task-brief-title">Switches &amp; Circuits</h4>
+          <p class="task-brief-desc">
+            Build a simple circuit and observe how a switch controls the flow of electricity to the bulb.
+          </p>
+          <div class="task-brief-section-title">Objectives</div>
+          <ul class="task-brief-list">
+            <li>Place the battery, switch, and bulb on the canvas.</li>
+            <li>Wire the components into a closed loop.</li>
+            <li>Toggle the switch and run the simulation.</li>
+            <li>Note when the bulb turns on and explain why.</li>
+          </ul>
         </div>
         <div class="ai-hint-box">
           <div class="ai-hint-header">
@@ -966,9 +996,6 @@ function renderSimulation() {
         <div class="canvas-bottom-bar" style="flex-direction:column;gap:6px;border:none;padding:0">
           <button class="btn btn-primary btn-full" id="run-btn" onclick="runSim()">
             ▶ RUN SIMULATION
-          </button>
-          <button class="btn btn-outline btn-full" onclick="CircuitSim.reset();updateSimStats()">
-            Reset
           </button>
         </div>
       </div>
@@ -1070,7 +1097,7 @@ function renderSimAdvanced() {
         <span style="font-size:.83rem;color:var(--text-secondary)">Project: Simple Switch Circuit / Group 4</span>
       </div>
       <nav class="sim-header-center">
-        ${['home','lessons','lab'].map(t => `
+        ${['home','lessons','lab','about'].map(t => `
           <a class="nav-link ${t==='lab'?'active':''}"
              onclick="navigate('${t==='home'?'dashboard':t==='lessons'?'reference':t==='lab'?'simulation':t}',{activeNavTab:'${t}'})"
              href="javascript:void(0)" style="font-size:.83rem;padding:5px 12px">${t.charAt(0).toUpperCase()+t.slice(1)}</a>
