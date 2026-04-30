@@ -317,46 +317,7 @@ function svgIcon(name, size = 16, color = 'currentColor') {
 
 /* ── Welcome ── */
 function renderWelcome() {
-  return `
-  <div class="welcome-page">
-    <div class="welcome-header">
-      <div class="header-logo">
-        <div class="logo-icon">${svgIcon('zap', 18, 'white')}</div>
-        Circuit Lab Learning Platform
-      </div>
-      <button class="header-help-btn" onclick="showHelp()">
-        ${svgIcon('help', 15)} Help
-      </button>
-    </div>
-
-    <main class="welcome-main">
-      <h1>Welcome to Circuit Lab</h1>
-      <p class="welcome-tagline">Learn. Simulate. Collaborate. Present</p>
-      <p class="welcome-subtitle">Please choose your role to continue.</p>
-
-      <div class="role-cards">
-        <div class="role-card" onclick="navigate('login')">
-          <div class="role-icon">
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.5">
-              <circle cx="12" cy="8" r="4"/>
-              <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-            </svg>
-          </div>
-          <h2>I am a Student</h2>
-          <p>Access lessons, simulations and collaborate with your team</p>
-          <button class="btn btn-primary btn-sm" style="margin-top:6px">student login</button>
-        </div>
-      </div>
-
-      <div class="shared-access-box">
-        <h3>Shared Access</h3>
-        <p>Learn more about how Circuit Lab supports digital learning</p>
-        <button class="btn btn-outline" onclick="navigate('about')">EXPLORE PLATFORM</button>
-      </div>
-    </main>
-
-    ${footerHTML()}
-  </div>`;
+  return renderLogin();
 }
 
 /* ── Login ── */
@@ -373,14 +334,13 @@ function renderLogin() {
       </div>
     </header>
 
-    <div class="auth-back" onclick="navigate('welcome')">
-      ${svgIcon('back', 15)} <span>Back</span> to Role Selection
-    </div>
-
     <main class="auth-main">
       <div class="auth-card">
-        <h1>Login</h1>
-        <p class="auth-subtitle">Welcome back! Please sign in to continue.</p>
+        <div class="auth-brand">
+          <h1 class="auth-brand-title">Welcome to Circuit Lab</h1>
+          <p class="auth-brand-tagline">Learn. Simulate. Collaborate. Present.</p>
+        </div>
+        <p class="auth-subtitle">Sign in to continue.</p>
 
         <form class="auth-form" id="login-form" onsubmit="handleLogin(event)">
           <div class="form-group">
