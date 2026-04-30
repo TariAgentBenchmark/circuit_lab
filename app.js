@@ -30,10 +30,10 @@ const state = {
   branchSnapshots: {},
   presStep: 0,
   presSteps: [
-    "First, the battery provides the potential energy. When I close the switch, the circuit is completed.",
-    "The current flows from the positive terminal through the switch.",
-    "The light bulb converts electrical energy into light — resistance creates heat and glow.",
-    "What happens if we add a second bulb? Let's explore that next.",
+    "Step 1 — Battery: place the source of potential energy that will drive the circuit.",
+    "Step 2 — Switch: connect a switch in series. It is still open, so no current can flow yet.",
+    "Step 3 — Bulb: add the light bulb as the load and close the loop with wires.",
+    "Step 4 — Close the switch: the loop is complete, current flows around the circuit and the bulb lights up.",
   ],
   presComments: [
     { from: 'Teacher', text: 'Nicholas, can you show the electron flow again?' },
@@ -1215,6 +1215,11 @@ function renderSimAdvanced() {
 /* ── Presentation ── */
 function renderPresentation() {
   const step = state.presSteps[state.presStep];
+  const s = state.presStep;
+  const showSwitch = s >= 1;
+  const showBulb   = s >= 2;
+  const closed     = s >= 3;
+  const flowing    = s >= 3;
   return `
   <div class="pres-page">
     <header class="pres-header">
@@ -1232,7 +1237,8 @@ function renderPresentation() {
       <div class="pres-stage">
         <div class="pres-circuit-frame">
           <svg width="340" height="230" viewBox="0 0 340 230" fill="none">
-            <text x="85" y="18" font-family="Inter" font-size="11" fill="#6b7280">battery</text>
+            <!-- Battery (always visible) -->
+            <text x="85" y="18" font-family="Inter" font-size="11" fill="#6b7280">Battery</text>
             <rect x="40" y="25" width="90" height="55" rx="6" fill="white" stroke="#374151" stroke-width="1.5"/>
             <line x1="43" y1="50" x2="54" y2="50" stroke="#374151" stroke-width="2"/>
             <line x1="54" y1="38" x2="54" y2="62" stroke="#374151" stroke-width="4"/>
@@ -1240,22 +1246,49 @@ function renderPresentation() {
             <line x1="72" y1="38" x2="72" y2="62" stroke="#374151" stroke-width="4"/>
             <line x1="81" y1="44" x2="81" y2="68" stroke="#374151" stroke-width="1.8"/>
             <line x1="118" y1="50" x2="130" y2="50" stroke="#374151" stroke-width="2"/>
-            <line x1="40" y1="52" x2="20" y2="52" stroke="#374151" stroke-width="2"/>
-            <line x1="130" y1="52" x2="220" y2="52" stroke="#374151" stroke-width="1.8"/>
-            <text x="174" y="34" font-family="Inter" font-size="10" fill="#6b7280">Switch</text>
-            <circle cx="190" cy="52" r="4" fill="#374151"/>
-            <line x1="194" y1="52" x2="214" y2="52" stroke="#374151" stroke-width="2"/>
-            <circle cx="215" cy="52" r="4" fill="#374151"/>
-            <line x1="220" y1="52" x2="260" y2="52" stroke="#374151" stroke-width="1.8"/>
-            <line x1="260" y1="52" x2="260" y2="100" stroke="#374151" stroke-width="1.8"/>
-            <circle cx="260" cy="145" r="42" fill="${state.presStep>=1?'#fef08a':'white'}" stroke="#374151" stroke-width="2"/>
-            ${state.presStep>=1?`<circle cx="260" cy="145" r="38" fill="#fef9c3" stroke="none"/>` : ''}
-            <line x1="240" y1="125" x2="280" y2="165" stroke="#374151" stroke-width="1.8"/>
-            <line x1="280" y1="125" x2="240" y2="165" stroke="#374151" stroke-width="1.8"/>
-            <text x="260" y="200" font-family="Inter" font-size="11" fill="#6b7280" text-anchor="middle">Light Bulb</text>
-            <line x1="260" y1="187" x2="260" y2="210" stroke="#374151" stroke-width="1.8"/>
-            <line x1="260" y1="210" x2="20" y2="210" stroke="#374151" stroke-width="1.8"/>
-            <line x1="20" y1="210" x2="20" y2="52" stroke="#374151" stroke-width="1.8"/>
+
+            ${showSwitch ? `
+              <!-- Top wire to switch + switch (open in steps 1-2, closed in step 3) -->
+              <line x1="130" y1="52" x2="186" y2="52" stroke="#374151" stroke-width="1.8"/>
+              <text x="174" y="34" font-family="Inter" font-size="10" fill="#6b7280">Switch</text>
+              <circle cx="190" cy="52" r="4" fill="#374151"/>
+              <circle cx="215" cy="52" r="4" fill="#374151"/>
+              ${closed
+                ? `<line x1="194" y1="52" x2="214" y2="52" stroke="#374151" stroke-width="2"/>`
+                : `<line x1="194" y1="52" x2="213" y2="34" stroke="#374151" stroke-width="2"/>`}
+            ` : ''}
+
+            ${showBulb ? `
+              <!-- Wire after switch, vertical to bulb, full return loop -->
+              <line x1="219" y1="52" x2="260" y2="52" stroke="#374151" stroke-width="1.8"/>
+              <line x1="260" y1="52" x2="260" y2="103" stroke="#374151" stroke-width="1.8"/>
+              <circle cx="260" cy="145" r="42"
+                      fill="${flowing ? '#fde047' : 'white'}"
+                      stroke="#374151" stroke-width="2"/>
+              ${flowing ? `
+                <circle cx="260" cy="145" r="38" fill="#fef9c3" opacity="0.9"/>
+                <circle cx="260" cy="145" r="50" fill="none" stroke="#fde047" stroke-width="1.5" opacity="0.6">
+                  <animate attributeName="r" from="42" to="62" dur="1.4s" repeatCount="indefinite"/>
+                  <animate attributeName="opacity" from="0.6" to="0" dur="1.4s" repeatCount="indefinite"/>
+                </circle>
+              ` : ''}
+              <line x1="240" y1="125" x2="280" y2="165" stroke="#374151" stroke-width="1.8"/>
+              <line x1="280" y1="125" x2="240" y2="165" stroke="#374151" stroke-width="1.8"/>
+              <text x="260" y="200" font-family="Inter" font-size="11" fill="#6b7280" text-anchor="middle">Light Bulb</text>
+              <line x1="260" y1="187" x2="260" y2="210" stroke="#374151" stroke-width="1.8"/>
+              <line x1="260" y1="210" x2="20" y2="210" stroke="#374151" stroke-width="1.8"/>
+              <line x1="20" y1="210" x2="20" y2="52" stroke="#374151" stroke-width="1.8"/>
+              <line x1="20" y1="52" x2="40" y2="52" stroke="#374151" stroke-width="1.8"/>
+            ` : ''}
+
+            ${flowing ? `
+              <!-- Animated current flow overlay -->
+              <path d="M 130 52 L 186 52 M 219 52 L 260 52 L 260 103 M 260 187 L 260 210 L 20 210 L 20 52 L 40 52"
+                    stroke="#fbbf24" stroke-width="3" fill="none" stroke-linecap="round"
+                    stroke-dasharray="6 10" opacity="0.9">
+                <animate attributeName="stroke-dashoffset" from="0" to="-32" dur="0.7s" repeatCount="indefinite"/>
+              </path>
+            ` : ''}
           </svg>
         </div>
 
