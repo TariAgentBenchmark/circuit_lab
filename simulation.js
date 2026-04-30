@@ -139,6 +139,8 @@ window.CircuitSim = {
   runSimulation,
   stopSimulation,
   getStats,
+  exportState,
+  importState,
 };
 
 function init(svgId, canvasId, onStatsChange) {
@@ -191,6 +193,41 @@ function addComponent(type) {
   render();
 }
 
+function cloneCircuitData() {
+  return {
+    components: simState.components.map(c => ({ ...c })),
+    wires: simState.wires.map(w => ({
+      id: w.id,
+      from: { ...w.from },
+      to: { ...w.to },
+    })),
+    nextId: simState.nextId,
+  };
+}
+
+function exportState() {
+  return cloneCircuitData();
+}
+
+function importState(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.components) || !Array.isArray(snapshot.wires)) {
+    return false;
+  }
+  stopSimulation();
+  simState.components = snapshot.components.map(c => ({ ...c }));
+  simState.wires = snapshot.wires.map(w => ({
+    id: w.id,
+    from: { ...w.from },
+    to: { ...w.to },
+  }));
+  simState.nextId = snapshot.nextId || 1;
+  simState.wiringFrom = null;
+  simState.dragging = null;
+  render();
+  updateStats();
+  return true;
+}
+
 function reset() {
   stopSimulation();
   simState.wiringFrom = null;
@@ -230,71 +267,95 @@ function validateCircuit() {
   const comps = simState.components;
   const wires = simState.wires;
 
-  const hasBattery = comps.some(c => c.type === 'battery');
-  const hasBulbOrLoad = comps.some(c => c.type === 'bulb' || c.type === 'buzzer' || c.type === 'led');
+  const batteries = comps.filter(c => c.type === 'battery');
+  const hasBattery = batteries.length > 0;
+  const hasLoad = comps.some(c => isLoadType(c.type));
   const switches = comps.filter(c => c.type === 'switch');
   const switchOpen = switches.some(c => c.state === 'open');
 
   if (!hasBattery) return { closed: false, reason: 'no_battery' };
-  if (!hasBulbOrLoad) return { closed: false, reason: 'no_load' };
-  if (switchOpen && switches.length > 0) return { closed: false, reason: 'switch_open' };
+  if (!hasLoad) return { closed: false, reason: 'no_load' };
 
-  // Build adjacency from wires
   const adj = {};
-  const addAdj = (key, val) => { if (!adj[key]) adj[key] = []; adj[key].push(val); };
+  const addAdj = (from, to, throughLoad = false) => {
+    if (!adj[from]) adj[from] = [];
+    adj[from].push({ key: to, throughLoad });
+  };
+  const addEdge = (a, b, throughLoad = false) => {
+    addAdj(a, b, throughLoad);
+    addAdj(b, a, throughLoad);
+  };
+
+  const terminalKey = (compId, terminal) => `${compId}:${terminal}`;
+
+  // External wires connect two component terminals.
   for (const w of wires) {
-    const fk = w.from.compId + ':' + w.from.terminal;
-    const tk = w.to.compId + ':' + w.to.terminal;
-    addAdj(fk, w.to.compId);
-    addAdj(tk, w.from.compId);
+    addEdge(
+      terminalKey(w.from.compId, w.from.terminal),
+      terminalKey(w.to.compId, w.to.terminal),
+      false
+    );
   }
 
-  // BFS from battery positive terminal
-  const bat = comps.find(c => c.type === 'battery');
-  if (!bat) return { closed: false, reason: 'no_battery' };
+  // Internal component behavior controls whether current can pass through it.
+  for (const comp of comps) {
+    const def = COMP_DEFS[comp.type];
+    if (!def) continue;
+    const terminals = Object.keys(def.terminals);
+    if (terminals.length < 2 || comp.type === 'battery') continue;
+    if (comp.type === 'switch' && comp.state !== 'closed') continue;
 
+    const throughLoad = isLoadType(comp.type);
+    addEdge(
+      terminalKey(comp.id, terminals[0]),
+      terminalKey(comp.id, terminals[1]),
+      throughLoad
+    );
+  }
+
+  const bat = batteries[0];
   const startKey = bat.id + ':pos';
-  const visited = new Set();
-  const queue = [startKey];
-  let reachedNeg = false;
+  const endKey = bat.id + ':neg';
+  const visited = new Set([startKey + '|0']);
+  const queue = [{ key: startKey, seenLoad: false }];
 
   while (queue.length > 0) {
-    const cur = queue.shift();
-    if (visited.has(cur)) continue;
-    visited.add(cur);
-    const [cid] = cur.split(':');
-    if (cid === bat.id && cur.includes('neg') && visited.size > 1) {
-      reachedNeg = true; break;
+    const current = queue.shift();
+    if (current.key === endKey && current.seenLoad) {
+      return { closed: true, reason: 'closed' };
     }
-    if (adj[cur]) {
-      for (const nextComp of adj[cur]) {
-        const comp = comps.find(c => c.id === nextComp);
-        if (!comp) continue;
-        const def = COMP_DEFS[comp.type];
-        if (!def) continue;
-        for (const t of Object.keys(def.terminals)) {
-          queue.push(nextComp + ':' + t);
-        }
-      }
+
+    for (const edge of adj[current.key] || []) {
+      const seenLoad = current.seenLoad || edge.throughLoad;
+      const visitKey = edge.key + '|' + (seenLoad ? '1' : '0');
+      if (visited.has(visitKey)) continue;
+      visited.add(visitKey);
+      queue.push({ key: edge.key, seenLoad });
     }
   }
 
-  // Simplified: if battery, at least one load, and no open switches — circuit is closed
-  return { closed: hasBattery && hasBulbOrLoad && !switchOpen };
+  return { closed: false, reason: switchOpen ? 'switch_open' : 'incomplete' };
+}
+
+function isLoadType(type) {
+  return type === 'bulb' || type === 'buzzer' || type === 'led' || type === 'resistor';
 }
 
 function calcStats() {
   if (!simState.running) {
-    const comps = simState.components;
-    const switches = comps.filter(c => c.type === 'switch');
-    const switchOpen = switches.some(c => c.state === 'open');
-    const hasBattery = comps.some(c => c.type === 'battery');
-    const hasBulb = comps.some(c => c.type === 'bulb' || c.type === 'led' || c.type === 'buzzer');
-
-    if (!hasBattery) return { voltage: '0.0', current: '0.00', status: 'No battery', ok: false };
-    if (!hasBulb)    return { voltage: '9.0', current: '0.00', status: 'No load', ok: false };
-    if (switchOpen && switches.length > 0) return { voltage: '9.0', current: '0.00', status: 'Open circuit', ok: false };
-    return { voltage: '9.0', current: '0.00', status: 'Not running', ok: false };
+    const valid = validateCircuit();
+    const statusByReason = {
+      no_battery: 'No battery',
+      no_load: 'No load',
+      switch_open: 'Open circuit',
+      incomplete: 'Incomplete circuit',
+    };
+    return {
+      voltage: valid.reason === 'no_battery' ? '0.0' : '9.0',
+      current: '0.00',
+      status: statusByReason[valid.reason] || 'Not running',
+      ok: false,
+    };
   }
   const bulbs  = simState.components.filter(c => c.type === 'bulb').length  || 0;
   const leds   = simState.components.filter(c => c.type === 'led').length   || 0;

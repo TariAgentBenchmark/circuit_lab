@@ -12,11 +12,22 @@ const state = {
   activeNavTab: 'home',
   slideIndex: 0,
   refFilter: 'all',
+  refSearch: '',
+  refLevel: 'all',
+  refSort: 'latest',
+  addCompCategory: 'all',
+  addCompSearch: '',
   chatMessages: [
     { from: 'Jenny', time: '4/18 12:55 PM', text: "I've added the battery but the switch isn't working yet." },
     { from: 'Cindy', time: '4/18 01:00 PM', text: "I'm joining now! Let's check the wires." },
   ],
   branchActive: 'v1',
+  branchCounter: 2,
+  branches: [
+    { id: 'v1', name: 'Version 1 (Bulb)', desc: 'Base circuit with 1 switch and 1 bulb.' },
+    { id: 'v2', name: 'Version 2 (Buzzer)', desc: 'Replacing bulb with buzzer to see results.' },
+  ],
+  branchSnapshots: {},
   presStep: 0,
   presSteps: [
     "First, the battery provides the potential energy. When I close the switch, the circuit is completed.",
@@ -24,19 +35,65 @@ const state = {
     "The light bulb converts electrical energy into light — resistance creates heat and glow.",
     "What happens if we add a second bulb? Let's explore that next.",
   ],
+  presComments: [
+    { from: 'Teacher', text: 'Nicholas, can you show the electron flow again?' },
+    { from: 'Catherine', text: 'Nicholas, can you show the electron flow again?' },
+  ],
 };
 
 /* ══ Router ═════════════════════════════════════════════════════════════ */
-function navigate(page, extra = {}) {
+const ROUTE_PAGES = [
+  'welcome',
+  'login',
+  'forgot',
+  'about',
+  'dashboard',
+  'lesson',
+  'simulation',
+  'simulation-advanced',
+  'presentation',
+  'reference',
+];
+
+let suppressHashChange = false;
+
+function normalizePage(page) {
+  return ROUTE_PAGES.includes(page) ? page : 'welcome';
+}
+
+function pageFromHash() {
+  return normalizePage(window.location.hash.replace(/^#/, '') || 'welcome');
+}
+
+function navTabForPage(page) {
+  if (page === 'dashboard' || page === 'welcome') return 'home';
+  if (page === 'reference' || page === 'lesson') return 'lessons';
+  if (page === 'simulation' || page === 'simulation-advanced' || page === 'presentation') return 'lab';
+  return state.activeNavTab;
+}
+
+function navigate(page, extra = {}, options = {}) {
+  const nextPage = normalizePage(page);
+  if (state.page === 'simulation-advanced' && nextPage !== 'simulation-advanced') {
+    saveActiveBranchSnapshot();
+  }
   Object.assign(state, extra);
-  state.page = page;
+  state.page = nextPage;
   const app = document.getElementById('app');
   app.innerHTML = '';             // triggers fadeIn animation
   void app.offsetHeight;
-  app.innerHTML = renderPage(page);
+  app.innerHTML = renderPage(nextPage);
   bindGlobal();
-  bindPage(page);
+  bindPage(nextPage);
   window.scrollTo(0, 0);
+
+  if (options.syncHash !== false) {
+    const targetHash = `#${nextPage}`;
+    if (window.location.hash !== targetHash) {
+      suppressHashChange = true;
+      window.location.hash = targetHash;
+    }
+  }
 }
 
 function renderPage(page) {
@@ -94,6 +151,19 @@ function footerHTML() {
       <a href="javascript:void(0)">Contact Us</a>
     </div>
   </footer>`;
+}
+
+function escapeHTML(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(value) {
+  return escapeHTML(value);
 }
 
 function teamSidebarHTML() {
@@ -958,8 +1028,76 @@ const buzzerIcon   = () => `<svg width="30" height="30" viewBox="0 0 80 80"><rec
 const resistorIcon = () => `<svg width="40" height="18" viewBox="0 0 100 50"><line x1="0" y1="25" x2="22" y2="25" stroke="#374151" stroke-width="2"/><rect x="22" y="15" width="56" height="20" rx="3" fill="#fef3c7" stroke="#374151" stroke-width="1.8"/><line x1="78" y1="25" x2="100" y2="25" stroke="#374151" stroke-width="2"/></svg>`;
 const ledIcon      = () => `<svg width="30" height="30" viewBox="0 0 80 80"><polygon points="24,24 24,56 56,40" fill="white" stroke="#374151" stroke-width="1.8"/><line x1="56" y1="24" x2="56" y2="56" stroke="#374151" stroke-width="2"/></svg>`;
 
+function componentLibrary() {
+  return [
+    { type: 'battery',  label: 'Battery',    category: 'power',   tags: 'cell voltage dc source', icon: batteryIcon(), frequent: true },
+    { type: 'switch',   label: 'Switch',     category: 'input',   tags: 'toggle open close control', icon: switchIcon(), frequent: true },
+    { type: 'bulb',     label: 'Light Bulb', category: 'output',  tags: 'lamp load glow light', icon: bulbIcon(), frequent: true },
+    { type: 'wire',     label: 'Wire',       category: 'wires',   tags: 'connection conductor lead', icon: wireIcon(), frequent: true },
+    { type: 'buzzer',   label: 'Buzzer',     category: 'output',  tags: 'sound alarm load', icon: buzzerIcon(), frequent: false },
+    { type: 'resistor', label: 'Resistor',   category: 'passive', tags: 'ohm resistance load', icon: resistorIcon(), frequent: false },
+    { type: 'led',      label: 'LED',        category: 'output',  tags: 'diode light load', icon: ledIcon(), frequent: false },
+  ];
+}
+
+const COMPONENT_CATEGORIES = [
+  { id: 'all', label: 'All Components' },
+  { id: 'power', label: 'Power' },
+  { id: 'input', label: 'Input' },
+  { id: 'output', label: 'Output' },
+  { id: 'passive', label: 'Passive' },
+  { id: 'wires', label: 'Wires & Connections' },
+];
+
+function getFilteredComponents() {
+  const term = state.addCompSearch.trim().toLowerCase();
+  return componentLibrary().filter(c => {
+    const categoryOk = state.addCompCategory === 'all' || c.category === state.addCompCategory;
+    const text = `${c.label} ${c.type} ${c.tags}`.toLowerCase();
+    const searchOk = !term || text.includes(term);
+    return categoryOk && searchOk;
+  });
+}
+
+function componentGridHTML(items) {
+  if (!items.length) {
+    return `<div class="empty-state compact">No matching components</div>`;
+  }
+  return `
+  <div class="add-comp-grid">
+    ${items.map(c => `
+      <div class="add-comp-item" onclick="addComponentFromLibrary('${c.type}','${escapeAttr(c.label)}')">
+        ${c.icon}<span>${escapeHTML(c.label)}</span>
+      </div>
+    `).join('')}
+  </div>`;
+}
+
+function addComponentSectionsHTML() {
+  const comps = getFilteredComponents();
+  const frequent = comps.filter(c => c.frequent);
+  return `
+    ${frequent.length ? `
+      <div style="font-size:.78rem;font-weight:600;color:var(--text-muted);margin-bottom:8px">Frequently Used</div>
+      ${componentGridHTML(frequent)}
+      <div style="font-size:.78rem;font-weight:600;color:var(--text-muted);margin:14px 0 8px">All Components</div>
+    ` : ''}
+    ${componentGridHTML(comps)}
+  `;
+}
+
+function getActiveBranch() {
+  return state.branches.find(b => b.id === state.branchActive) || state.branches[0];
+}
+
 /* ── Simulation Advanced ── */
 function renderSimAdvanced() {
+  const activeBranch = getActiveBranch();
+  const branches = state.branches.map(b => ({
+    ...b,
+    active: b.id === activeBranch.id,
+    badge: b.id === activeBranch.id ? 'Active' : 'Draft',
+  }));
   return `
   <div class="sim-page">
     <header class="sim-header">
@@ -994,10 +1132,7 @@ function renderSimAdvanced() {
       <!-- Branches panel -->
       <div class="branches-panel">
         <div class="branches-title">Design Branches ${svgIcon('info',13)}</div>
-        ${[
-          {id:'v1', name:'Version 1 (Bulb)', desc:'Base circuit with 1 switch and 1 bulb.', active:true, badge:'Active'},
-          {id:'v2', name:'Version 2 (Buzzer)', desc:'Replacing bulb with buzzer to see results.', active:false, badge:'Draft'},
-        ].map(b => `
+        ${branches.map(b => `
           <div class="branch-card ${b.active?'active':''}" onclick="selectBranch('${b.id}')">
             <div class="branch-card-name">
               ${b.name}
@@ -1006,7 +1141,7 @@ function renderSimAdvanced() {
             <div class="branch-card-desc">${b.desc}</div>
           </div>
         `).join('')}
-        <button class="btn btn-outline btn-sm btn-full" style="margin-top:4px">
+        <button class="btn btn-outline btn-sm btn-full" onclick="createBranch()" style="margin-top:4px">
           + CREATE NEW BRANCH
         </button>
         <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
@@ -1023,7 +1158,7 @@ function renderSimAdvanced() {
       <!-- Canvas -->
       <div class="canvas-area">
         <div class="canvas-toolbar">
-          <span class="canvas-title">Project: Simple Switch Circuit — Version 1</span>
+          <span class="canvas-title">Project: Simple Switch Circuit — ${activeBranch.name}</span>
           <button class="btn btn-ghost btn-sm" onclick="CircuitSim.reset()">Reset</button>
           <span style="margin-left:auto;font-size:.75rem;color:var(--text-muted)">
             Drag • Wire • Toggle switch
@@ -1173,13 +1308,13 @@ function renderPresentation() {
 
         <div class="pres-qa">
           <div class="pres-qa-title">Q&A / Comments</div>
-          <div class="pres-comment">
-            <div class="pres-comment-name">Teacher:</div>
-            Nicholas, can you show the electron flow again?
-          </div>
-          <div class="pres-comment">
-            <div class="pres-comment-name">Catherine:</div>
-            Nicholas, can you show the electron flow again?
+          <div id="pres-comment-list" class="pres-comment-list">
+            ${state.presComments.map(c => `
+              <div class="pres-comment">
+                <div class="pres-comment-name">${escapeHTML(c.from)}:</div>
+                ${escapeHTML(c.text)}
+              </div>
+            `).join('')}
           </div>
           <input class="pres-comment-input" placeholder="Add a comment…" id="pres-comment-inp"
                  onkeydown="if(event.key==='Enter')addPresComment()"/>
@@ -1234,17 +1369,85 @@ function lessonCoverHTML(l) {
   </div>`;
 }
 
+function getTopicCounts() {
+  return REF_LESSONS.reduce((acc, lesson) => {
+    acc.all += 1;
+    acc[lesson.topic] = (acc[lesson.topic] || 0) + 1;
+    return acc;
+  }, { all: 0 });
+}
+
+function getFilteredLessons() {
+  const term = state.refSearch.trim().toLowerCase();
+  const lessons = REF_LESSONS.filter(l => {
+    const topicOk = state.refFilter === 'all' || l.topic === state.refFilter;
+    const levelOk = state.refLevel === 'all' || l.level.toLowerCase() === state.refLevel;
+    const text = `${l.num} ${l.title} ${l.desc} ${l.level} ${l.topic}`.toLowerCase();
+    const searchOk = !term || text.includes(term);
+    return topicOk && levelOk && searchOk;
+  });
+
+  return lessons.sort((a, b) => {
+    if (state.refSort === 'az') return a.title.localeCompare(b.title);
+    if (state.refSort === 'progress') return b.pct - a.pct || a.num.localeCompare(b.num);
+    return b.num.localeCompare(a.num);
+  });
+}
+
+function referenceLessonCardHTML(l) {
+  return `
+  <div class="ref-lesson-card" style="align-items:stretch;padding:0;overflow:hidden">
+    ${lessonCoverHTML(l)}
+    <div class="ref-lesson-body" style="padding:14px 16px">
+      <div class="ref-lesson-meta">
+        <span class="badge badge-gray" style="font-size:.68rem">Lesson ${l.num}</span>
+        <span class="badge ${l.level==='Beginner'?'badge-success':l.level==='Intermediate'?'badge-info':'badge-warning'}"
+              style="font-size:.68rem">${l.level}</span>
+        <span style="font-size:.72rem;color:var(--text-muted);margin-left:auto">
+          ⏱ ${l.duration.replace(':',' min ')} sec
+        </span>
+      </div>
+      <h4 style="margin:6px 0 4px">${l.title}</h4>
+      <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:10px;line-height:1.5">${l.desc}</p>
+      ${l.pct > 0 ? `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div class="progress-bar" style="flex:1">
+            <div class="progress-fill ${l.pct===100?'green':''}" style="width:${l.pct}%"></div>
+          </div>
+          <span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">${l.pct}% Complete</span>
+        </div>` : `<div style="font-size:.75rem;color:var(--text-muted);margin-bottom:10px">Not Started</div>`}
+    </div>
+    <div class="ref-lesson-action" style="padding:0 14px;align-self:center;flex-shrink:0">
+      <button class="btn ${l.pct===100?'btn-outline':l.pct>0?'btn-accent':'btn-primary'} btn-sm"
+              onclick="event.stopPropagation();navigate('lesson',{activeNavTab:'lessons'})">
+        ${l.pct===100?'REVIEW LESSON':l.pct>0?'CONTINUE LESSON':'START LESSON'}
+      </button>
+    </div>
+  </div>`;
+}
+
+function referenceListHTML(lessons) {
+  return lessons.length
+    ? lessons.map(referenceLessonCardHTML).join('')
+    : `<div class="empty-state">No lessons match the current filters.</div>`;
+}
+
+function referenceCountText(lessons) {
+  return lessons.length
+    ? `Showing 1-${lessons.length} of ${REF_LESSONS.length} lessons`
+    : `Showing 0 of ${REF_LESSONS.length} lessons`;
+}
+
 function renderReference() {
+  const topicCounts = getTopicCounts();
   const topics = [
-    { id:'all',        label:'All Topics',          count: REF_LESSONS.length },
-    { id:'basics',     label:'Basics & DC Circuits', count: 2 },
-    { id:'series',     label:'Series Circuits',      count: 1 },
-    { id:'parallel',   label:'Parallel Circuits',    count: 1 },
-    { id:'advanced',   label:'Advanced',             count: 2 },
+    { id:'all',        label:'All Topics',           count: topicCounts.all || 0 },
+    { id:'basics',     label:'Basics & DC Circuits', count: topicCounts.basics || 0 },
+    { id:'series',     label:'Series Circuits',      count: topicCounts.series || 0 },
+    { id:'parallel',   label:'Parallel Circuits',    count: topicCounts.parallel || 0 },
+    { id:'advanced',   label:'Advanced',             count: topicCounts.advanced || 0 },
   ];
-  const filtered = state.refFilter === 'all'
-    ? REF_LESSONS
-    : REF_LESSONS.filter(l => l.topic === state.refFilter);
+  const filtered = getFilteredLessons();
 
   return `
   <div class="page-wrapper">
@@ -1260,20 +1463,20 @@ function renderReference() {
           <div class="search-box">
             ${svgIcon('search', 15, 'var(--text-muted)')}
             <input type="text" id="ref-search" placeholder="Search lessons, topics, or keywords…"
-                   oninput="filterRef(this.value)"/>
+                   value="${escapeAttr(state.refSearch)}" oninput="filterRef(this.value)"/>
           </div>
-          <select class="filter-select" id="topic-select" onchange="state.refFilter=this.value;navigate('reference')">
-            <option value="all">ALL topic</option>
-            <option value="basics">Basic concept</option>
-            <option value="series">DC circuits</option>
-            <option value="parallel">components</option>
-            <option value="advanced">Advanced</option>
+          <select class="filter-select" id="topic-select" onchange="setRefTopic(this.value)">
+            <option value="all" ${state.refFilter==='all'?'selected':''}>ALL topic</option>
+            <option value="basics" ${state.refFilter==='basics'?'selected':''}>Basic concept</option>
+            <option value="series" ${state.refFilter==='series'?'selected':''}>DC circuits</option>
+            <option value="parallel" ${state.refFilter==='parallel'?'selected':''}>components</option>
+            <option value="advanced" ${state.refFilter==='advanced'?'selected':''}>Advanced</option>
           </select>
           <select class="filter-select" onchange="filterRefLevel(this.value)">
-            <option value="">All Levels</option>
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
+            <option value="all" ${state.refLevel==='all'?'selected':''}>All Levels</option>
+            <option value="beginner" ${state.refLevel==='beginner'?'selected':''}>Beginner</option>
+            <option value="intermediate" ${state.refLevel==='intermediate'?'selected':''}>Intermediate</option>
+            <option value="advanced" ${state.refLevel==='advanced'?'selected':''}>Advanced</option>
           </select>
           <button class="clear-filters-btn" onclick="clearRefFilters()">
             ${svgIcon('x',12)} CLEAR FILTERS
@@ -1281,50 +1484,21 @@ function renderReference() {
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <span style="font-size:.83rem;color:var(--text-muted)">
-            Showing 1–${filtered.length} of ${REF_LESSONS.length} lessons
+          <span id="ref-results-count" style="font-size:.83rem;color:var(--text-muted)">
+            ${referenceCountText(filtered)}
           </span>
           <div style="display:flex;align-items:center;gap:8px">
             <span style="font-size:.8rem;color:var(--text-muted)">Sort by:</span>
-            <select class="filter-select" style="padding:5px 8px;font-size:.78rem">
-              <option>Latest</option>
-              <option>A-Z</option>
-              <option>Progress</option>
+            <select class="filter-select" onchange="setRefSort(this.value)" style="padding:5px 8px;font-size:.78rem">
+              <option value="latest" ${state.refSort==='latest'?'selected':''}>Latest</option>
+              <option value="az" ${state.refSort==='az'?'selected':''}>A-Z</option>
+              <option value="progress" ${state.refSort==='progress'?'selected':''}>Progress</option>
             </select>
           </div>
         </div>
 
         <div class="ref-lesson-list" id="ref-lesson-list">
-          ${filtered.map(l => `
-            <div class="ref-lesson-card" style="align-items:stretch;padding:0;overflow:hidden">
-              ${lessonCoverHTML(l)}
-              <div class="ref-lesson-body" style="padding:14px 16px">
-                <div class="ref-lesson-meta">
-                  <span class="badge badge-gray" style="font-size:.68rem">Lesson ${l.num}</span>
-                  <span class="badge ${l.level==='Beginner'?'badge-success':l.level==='Intermediate'?'badge-info':'badge-warning'}"
-                        style="font-size:.68rem">${l.level}</span>
-                  <span style="font-size:.72rem;color:var(--text-muted);margin-left:auto">
-                    ⏱ ${l.duration.replace(':',' min ')} sec
-                  </span>
-                </div>
-                <h4 style="margin:6px 0 4px">${l.title}</h4>
-                <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:10px;line-height:1.5">${l.desc}</p>
-                ${l.pct > 0 ? `
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-                    <div class="progress-bar" style="flex:1">
-                      <div class="progress-fill ${l.pct===100?'green':''}" style="width:${l.pct}%"></div>
-                    </div>
-                    <span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">${l.pct}% Complete</span>
-                  </div>` : `<div style="font-size:.75rem;color:var(--text-muted);margin-bottom:10px">Not Started</div>`}
-              </div>
-              <div class="ref-lesson-action" style="padding:0 14px;align-self:center;flex-shrink:0">
-                <button class="btn ${l.pct===100?'btn-outline':l.pct>0?'btn-accent':'btn-primary'} btn-sm"
-                        onclick="event.stopPropagation();navigate('lesson',{activeNavTab:'lessons'})">
-                  ${l.pct===100?'REVIEW LESSON':l.pct>0?'CONTINUE LESSON':'START LESSON'}
-                </button>
-              </div>
-            </div>
-          `).join('')}
+          ${referenceListHTML(filtered)}
         </div>
       </main>
 
@@ -1334,7 +1508,7 @@ function renderReference() {
           <div class="ref-topic-list">
             ${topics.map(t => `
               <div class="ref-topic-item ${state.refFilter===t.id?'active':''}"
-                   onclick="state.refFilter='${t.id}';navigate('reference')">
+                   onclick="setRefTopic('${t.id}')">
                 ${t.label}
                 <span class="ref-topic-count">${t.count}</span>
               </div>
@@ -1432,24 +1606,8 @@ function openModal(type) {
   }
 
   if (type === 'add-component') {
-    const categories = ['All Components','Power','Input','Output','Passive','Wires & Connections','Sensors','Other'];
-    const allComps = [
-      {type:'battery',  label:'Battery',     icon:batteryIcon()},
-      {type:'battery',  label:'Battery (AA)',icon:batteryIcon()},
-      {type:'bulb',     label:'DC Power',    icon:bulbIcon()},
-      {type:'switch',   label:'Switch',      icon:switchIcon()},
-      {type:'bulb',     label:'Light Bulb',  icon:bulbIcon()},
-      {type:'wire',     label:'Wire',        icon:wireIcon()},
-      {type:'buzzer',   label:'Buzzer',      icon:buzzerIcon()},
-      {type:'resistor', label:'Resistor',    icon:resistorIcon()},
-      {type:'resistor', label:'Capacitor',   icon:resistorIcon()},
-      {type:'wire',     label:'Wire',        icon:wireIcon()},
-      {type:'wire',     label:'Junction',    icon:wireIcon()},
-      {type:'wire',     label:'Ground',      icon:wireIcon()},
-      {type:'resistor', label:'Fuse',        icon:resistorIcon()},
-      {type:'led',      label:'Motor',       icon:ledIcon()},
-      {type:'led',      label:'LED',         icon:ledIcon()},
-    ];
+    state.addCompCategory = 'all';
+    state.addCompSearch = '';
     box.className = 'modal-box modal-wide';
     box.innerHTML = `
     <div class="modal-header">
@@ -1458,32 +1616,22 @@ function openModal(type) {
     </div>
     <div class="modal-body" style="flex-direction:row;gap:16px;padding:16px 20px">
       <div class="comp-categories" style="min-width:130px">
-        ${categories.map((c,i) => `
-          <div class="comp-cat-item ${i===0?'active':''}" onclick="this.closest('.comp-categories').querySelectorAll('.comp-cat-item').forEach(el=>el.classList.remove('active'));this.classList.add('active')">${c}</div>
+        ${COMPONENT_CATEGORIES.map(c => `
+          <div class="comp-cat-item ${state.addCompCategory===c.id?'active':''}"
+               data-comp-category="${c.id}" onclick="setAddComponentCategory('${c.id}')">${c.label}</div>
         `).join('')}
       </div>
       <div style="flex:1">
         <div style="margin-bottom:12px">
           <div class="search-box">
             ${svgIcon('search',14,'var(--text-muted)')}
-            <input type="text" placeholder="Search components" style="border:none;background:none;font-size:.875rem;flex:1"/>
+            <input type="text" id="component-search" placeholder="Search components"
+                   oninput="setAddComponentSearch(this.value)"
+                   style="border:none;background:none;font-size:.875rem;flex:1"/>
           </div>
         </div>
-        <div style="font-size:.78rem;font-weight:600;color:var(--text-muted);margin-bottom:8px">Frequently Used</div>
-        <div class="add-comp-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:14px">
-          ${allComps.slice(0,5).map(c => `
-            <div class="add-comp-item" onclick="CircuitSim.addComponent('${c.type}');closeModal();showToast('${c.label} added to canvas')">
-              ${c.icon}<span>${c.label}</span>
-            </div>
-          `).join('')}
-        </div>
-        <div style="font-size:.78rem;font-weight:600;color:var(--text-muted);margin-bottom:8px">All Components</div>
-        <div class="add-comp-grid" style="grid-template-columns:repeat(5,1fr)">
-          ${allComps.map(c => `
-            <div class="add-comp-item" onclick="CircuitSim.addComponent('${c.type}');closeModal();showToast('${c.label} added to canvas')">
-              ${c.icon}<span>${c.label}</span>
-            </div>
-          `).join('')}
+        <div id="component-results">
+          ${addComponentSectionsHTML()}
         </div>
       </div>
     </div>
@@ -1501,7 +1649,11 @@ function closeModal() {
 }
 
 /* ══ Event Handlers ══════════════════════════════════════════════════════ */
+let globalEventsBound = false;
+
 function bindGlobal() {
+  if (globalEventsBound) return;
+  globalEventsBound = true;
   document.getElementById('modal-overlay').addEventListener('click', e => {
     if (e.target.id === 'modal-overlay') closeModal();
   });
@@ -1514,6 +1666,9 @@ function bindPage(page) {
       const container = document.getElementById('circuit-canvas-container');
       if (svg && container) {
         CircuitSim.init('circuit-svg', 'circuit-canvas-container', updateSimStats);
+        if (page === 'simulation-advanced' && state.branchSnapshots[state.branchActive]) {
+          CircuitSim.importState(state.branchSnapshots[state.branchActive]);
+        }
         updateSimStats(CircuitSim.getStats());
       }
     }, 50);
@@ -1608,7 +1763,35 @@ function addCompClick(type) {
     CircuitSim.addComponent(type);
     showToast(COMP_DEFS_LABELS[type] + ' added', 'success');
     updateSimStats(CircuitSim.getStats());
+    saveActiveBranchSnapshot();
   }
+}
+
+function addComponentFromLibrary(type, label) {
+  if (!window.CircuitSim) return;
+  CircuitSim.addComponent(type);
+  saveActiveBranchSnapshot();
+  closeModal();
+  showToast(`${label} added to canvas`, 'success');
+  updateSimStats(CircuitSim.getStats());
+}
+
+function setAddComponentCategory(category) {
+  state.addCompCategory = category || 'all';
+  updateAddComponentResults();
+}
+
+function setAddComponentSearch(value) {
+  state.addCompSearch = value;
+  updateAddComponentResults();
+}
+
+function updateAddComponentResults() {
+  const results = document.getElementById('component-results');
+  if (results) results.innerHTML = addComponentSectionsHTML();
+  document.querySelectorAll('[data-comp-category]').forEach(el => {
+    el.classList.toggle('active', el.dataset.compCategory === state.addCompCategory);
+  });
 }
 
 function runSim() {
@@ -1619,7 +1802,13 @@ function runSim() {
     btn.onclick = stopSimWrapper;
     showToast('Circuit complete! Current is flowing.', 'success');
   } else {
-    showToast('Circuit incomplete — ' + (result.reason === 'switch_open' ? 'switch is open' : result.reason === 'no_load' ? 'add a load (bulb/buzzer)' : 'check connections'), 'warning');
+    const reason = {
+      no_battery: 'add a battery',
+      no_load: 'add a load (bulb/buzzer/resistor)',
+      switch_open: 'switch is open',
+      incomplete: 'check terminal connections',
+    }[result.reason] || 'check connections';
+    showToast('Circuit incomplete — ' + reason, 'warning');
   }
   updateSimStats(CircuitSim.getStats());
 }
@@ -1649,6 +1838,12 @@ function updateSimStats(stats) {
       hEl.textContent = `Great work! The circuit is complete. Current = ${stats.voltage}V ÷ R = ${stats.current}A flowing through the load.`;
     } else if (stats.status === 'Open circuit') {
       hEl.textContent = 'Toggle the switch to close the circuit. Then press RUN to see the simulation.';
+    } else if (stats.status === 'Incomplete circuit') {
+      hEl.textContent = 'Complete the loop by connecting the battery, switch, load, and return path with wires.';
+    } else if (stats.status === 'No battery') {
+      hEl.textContent = 'Add a battery to provide voltage for the circuit.';
+    } else if (stats.status === 'No load') {
+      hEl.textContent = 'Add a load such as a bulb, buzzer, LED, or resistor before running the circuit.';
     } else {
       hEl.textContent = 'Try adding a battery and a light bulb, then connect them with wires.';
     }
@@ -1660,46 +1855,46 @@ function toggleWiringMode() {
   if (btn) btn.classList.toggle('active');
 }
 
-/* ── Reference filters ── */
-function filterRef(val) {
-  const list = document.getElementById('ref-lesson-list');
-  if (!list) return;
-  const filtered = REF_LESSONS.filter(l =>
-    l.title.toLowerCase().includes(val.toLowerCase()) ||
-    l.desc.toLowerCase().includes(val.toLowerCase())
-  );
-  list.innerHTML = filtered.map(l => `
-    <div class="ref-lesson-card" style="align-items:stretch;padding:0;overflow:hidden">
-      ${lessonCoverHTML(l)}
-      <div class="ref-lesson-body" style="padding:14px 16px">
-        <div class="ref-lesson-meta">
-          <span class="badge badge-gray" style="font-size:.68rem">Lesson ${l.num}</span>
-          <span class="badge ${l.level==='Beginner'?'badge-success':l.level==='Intermediate'?'badge-info':'badge-warning'}"
-                style="font-size:.68rem">${l.level}</span>
-        </div>
-        <h4 style="margin:6px 0 4px">${l.title}</h4>
-        <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:10px">${l.desc}</p>
-        ${l.pct > 0 ? `
-          <div style="display:flex;align-items:center;gap:8px">
-            <div class="progress-bar" style="flex:1">
-              <div class="progress-fill ${l.pct===100?'green':''}" style="width:${l.pct}%"></div>
-            </div>
-            <span style="font-size:.72rem;color:var(--text-muted)">${l.pct}%</span>
-          </div>` : `<div style="font-size:.75rem;color:var(--text-muted)">Not Started</div>`}
-      </div>
-      <div class="ref-lesson-action" style="padding:0 14px;align-self:center;flex-shrink:0">
-        <button class="btn ${l.pct===100?'btn-outline':l.pct>0?'btn-accent':'btn-primary'} btn-sm"
-                onclick="event.stopPropagation();navigate('lesson',{activeNavTab:'lessons'})">
-          ${l.pct===100?'REVIEW LESSON':l.pct>0?'CONTINUE LESSON':'START LESSON'}
-        </button>
-      </div>
-    </div>
-  `).join('');
+function saveActiveBranchSnapshot() {
+  if (state.page !== 'simulation-advanced' || !window.CircuitSim?.exportState) return;
+  state.branchSnapshots[state.branchActive] = CircuitSim.exportState();
 }
 
-function filterRefLevel(level) { /* live filter could go here */ }
+/* ── Reference filters ── */
+function filterRef(val) {
+  state.refSearch = val;
+  updateReferenceResults();
+}
+
+function filterRefLevel(level) {
+  state.refLevel = level || 'all';
+  updateReferenceResults();
+}
+
+function setRefSort(sort) {
+  state.refSort = sort || 'latest';
+  updateReferenceResults();
+}
+
+function setRefTopic(topic) {
+  state.refFilter = topic || 'all';
+  navigate('reference', { activeNavTab: 'lessons' });
+}
+
+function updateReferenceResults() {
+  const list = document.getElementById('ref-lesson-list');
+  if (!list) return;
+  const filtered = getFilteredLessons();
+  list.innerHTML = referenceListHTML(filtered);
+  const count = document.getElementById('ref-results-count');
+  if (count) count.textContent = referenceCountText(filtered);
+}
+
 function clearRefFilters() {
   state.refFilter = 'all';
+  state.refSearch = '';
+  state.refLevel = 'all';
+  state.refSort = 'latest';
   navigate('reference');
 }
 
@@ -1719,10 +1914,47 @@ function presNav(delta) {
   navigate('presentation');
 }
 
+function addPresComment() {
+  const input = document.getElementById('pres-comment-inp');
+  const msg = input?.value.trim();
+  if (!msg) return;
+  state.presComments.push({ from: state.user.name, text: msg });
+  if (input) input.value = '';
+  const list = document.getElementById('pres-comment-list');
+  if (list) {
+    list.innerHTML = state.presComments.map(c => `
+      <div class="pres-comment">
+        <div class="pres-comment-name">${escapeHTML(c.from)}:</div>
+        ${escapeHTML(c.text)}
+      </div>
+    `).join('');
+    list.scrollTop = list.scrollHeight;
+  }
+}
+
 /* ── Branch selection ── */
 function selectBranch(id) {
+  if (id === state.branchActive) return;
+  saveActiveBranchSnapshot();
   state.branchActive = id;
   navigate('simulation-advanced');
+}
+
+function createBranch() {
+  saveActiveBranchSnapshot();
+  const source = getActiveBranch();
+  const nextNum = state.branchCounter + 1;
+  const id = 'v' + nextNum;
+  state.branchCounter = nextNum;
+  state.branches.push({
+    id,
+    name: `Version ${nextNum} (Experiment)`,
+    desc: `Copied from ${source?.name || 'the active branch'} for a new circuit idea.`,
+  });
+  state.branchSnapshots[id] = window.CircuitSim?.exportState ? CircuitSim.exportState() : null;
+  state.branchActive = id;
+  navigate('simulation-advanced');
+  showToast(`Created ${state.branches[state.branches.length - 1].name}`, 'success');
 }
 
 /* ── Help ── */
@@ -1766,7 +1998,17 @@ function showToast(msg, type = '') {
 
 /* ══ Boot ════════════════════════════════════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', () => {
-  navigate('welcome');
+  const initialPage = pageFromHash();
+  navigate(initialPage, { activeNavTab: navTabForPage(initialPage) }, { syncHash: !window.location.hash });
+});
+
+window.addEventListener('hashchange', () => {
+  if (suppressHashChange) {
+    suppressHashChange = false;
+    return;
+  }
+  const page = pageFromHash();
+  navigate(page, { activeNavTab: navTabForPage(page) }, { syncHash: false });
 });
 
 // Keyboard shortcuts
