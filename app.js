@@ -18,8 +18,8 @@ const state = {
   addCompCategory: 'all',
   addCompSearch: '',
   chatMessages: [
-    { from: 'Jenny', time: '4/18 12:55 PM', text: "I've added the battery but the switch isn't working yet." },
-    { from: 'Cindy', time: '4/18 01:00 PM', text: "I'm joining now! Let's check the wires." },
+    { from: 'Catherine', time: '4/18 12:55 PM', text: "I've added the battery. Can we test the switch next?" },
+    { from: 'Jack', time: '4/18 01:00 PM', text: "I'm online now. Let's connect the bulb back to the battery." },
   ],
   branchActive: 'v1',
   branchCounter: 2,
@@ -28,12 +28,13 @@ const state = {
     { id: 'v2', name: 'Version 2 (Buzzer)', desc: 'Replacing bulb with buzzer to see results.' },
   ],
   branchSnapshots: {},
+  presentationSnapshot: null,
   presStep: 0,
   presSteps: [
-    "Step 1 — Battery: place the source of potential energy that will drive the circuit.",
-    "Step 2 — Switch: connect a switch in series. It is still open, so no current can flow yet.",
-    "Step 3 — Bulb: add the light bulb as the load and close the loop with wires.",
-    "Step 4 — Close the switch: the loop is complete, current flows around the circuit and the bulb lights up.",
+    "First, the battery provides the potential energy. When I close the switch, the circuit is completed.",
+    "The current flows from the positive terminal through the switch.",
+    "The connected output changes electrical energy into light or sound.",
+    "What happens if we add a second switch or swap in a buzzer? Let's compare versions.",
   ],
   presComments: [
     { from: 'Teacher', text: 'Nicholas, can you show the electron flow again?' },
@@ -42,7 +43,7 @@ const state = {
   teamMembers: [
     { name: 'Nicholas',  role: 'Me', status: 'online',  initial: 'N', badge: null,     self: true  },
     { name: 'Catherine', role: '',   status: 'online',  initial: 'C', badge: null,     self: false },
-    { name: 'Jack',      role: '',   status: 'offline', initial: 'J', badge: 'remote', self: false },
+    { name: 'Jack',      role: '',   status: 'online',  initial: 'J', badge: 'remote', self: false },
   ],
 };
 
@@ -80,6 +81,9 @@ function navTabForPage(page) {
 
 function navigate(page, extra = {}, options = {}) {
   const nextPage = normalizePage(page);
+  if ((state.page === 'simulation' || state.page === 'simulation-advanced') && window.CircuitSim?.exportState) {
+    state.presentationSnapshot = CircuitSim.exportState();
+  }
   if (state.page === 'simulation-advanced' && nextPage !== 'simulation-advanced') {
     saveActiveBranchSnapshot();
   }
@@ -924,6 +928,7 @@ function renderSimulation() {
         <div class="avatar-group">
           <div class="avatar" title="Nicholas" style="background:#2563eb">N</div>
           <div class="avatar" title="Catherine" style="background:#7c3aed">C</div>
+          <div class="avatar" title="Jack" style="background:#d97706">J</div>
         </div>
       </div>
     </header>
@@ -936,7 +941,6 @@ function renderSimulation() {
           {type:'battery',  icon: batteryIcon()},
           {type:'switch',   icon: switchIcon()},
           {type:'bulb',     icon: bulbIcon()},
-          {type:'wire',     icon: wireIcon()},
           {type:'buzzer',   icon: buzzerIcon()},
           {type:'resistor', icon: resistorIcon()},
           {type:'led',      icon: ledIcon()},
@@ -945,7 +949,7 @@ function renderSimulation() {
                draggable="true"
                ondragstart="dragComp(event,'${c.type}')"
                onclick="addCompClick('${c.type}')"
-               title="Drag or click to add ${c.type}">
+               title="Tap to add, then drag on the canvas">
             ${c.icon}
             <span class="comp-item-label">${COMP_DEFS_LABELS[c.type]||c.type}</span>
           </div>
@@ -960,14 +964,20 @@ function renderSimulation() {
             ${svgIcon('plus',14)} Add
           </button>
           <button class="btn btn-ghost btn-sm" id="wiring-mode-btn" onclick="toggleWiringMode()"
-                  title="Click two terminals to connect them">
-            ${svgIcon('zap',14)} Wire
+                  title="Tap two terminals to connect them">
+            ${svgIcon('zap',14)} Connect
           </button>
-          <span style="margin-left:auto;font-size:.75rem;color:var(--text-muted)">
-            Drag components • Click switch to toggle • Double-click wire to delete
+          <button class="btn btn-ghost btn-sm" onclick="resetSimulation()" title="Reset circuit">
+            Reset
+          </button>
+          <span class="wire-mode-hint" id="wire-mode-hint">
+            Tap Connect, then tap two terminals.
           </span>
         </div>
         <div id="circuit-canvas-container">
+          <div id="canvas-feedback" class="canvas-feedback neutral">
+            Build a loop with the battery, switch, and output. Press Run to test it.
+          </div>
           <svg id="circuit-svg" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
       </div>
@@ -992,6 +1002,21 @@ function renderSimulation() {
             <li>Note when the bulb turns on and explain why.</li>
           </ul>
         </div>
+        <div class="live-stats-compact">
+          <div class="stats-panel-title">Live Stats</div>
+          <div class="stat-block">
+            <div class="stat-label">Voltage Output</div>
+            <div><span class="stat-value" id="stat-voltage">9.0</span> <span class="stat-unit">V</span></div>
+          </div>
+          <div class="stat-block">
+            <div class="stat-label">Current</div>
+            <div><span class="stat-value" id="stat-current">0.00</span> <span class="stat-unit">A</span></div>
+            <div class="stat-status-row">
+              <span class="status-dot offline" id="stat-dot"></span>
+              <span id="stat-status">Open circuit</span>
+            </div>
+          </div>
+        </div>
         <div class="ai-hint-box">
           <div class="ai-hint-header">
             ${svgIcon('star', 13, '#92400e')} Experimental assistant
@@ -1002,6 +1027,9 @@ function renderSimulation() {
           <button class="btn btn-primary btn-full" id="run-btn" onclick="runSim()">
             ▶ RUN SIMULATION
           </button>
+          <button class="btn btn-outline btn-full" onclick="resetSimulation()">
+            Reset
+          </button>
         </div>
       </div>
     </div>
@@ -1010,7 +1038,7 @@ function renderSimulation() {
 
 const COMP_DEFS_LABELS = {
   battery:'Battery', switch:'Switch', bulb:'Light Bulb',
-  wire:'Wire', buzzer:'Buzzer', resistor:'Resistor', led:'LED'
+  buzzer:'Buzzer', resistor:'Resistor', led:'LED'
 };
 const batteryIcon  = () => `<svg width="44" height="28" viewBox="0 0 110 60"><line x1="0" y1="30" x2="38" y2="30" stroke="#374151" stroke-width="2"/><line x1="72" y1="30" x2="110" y2="30" stroke="#374151" stroke-width="2"/><line x1="38" y1="14" x2="38" y2="46" stroke="#374151" stroke-width="4"/><line x1="47" y1="20" x2="47" y2="40" stroke="#374151" stroke-width="2"/><line x1="56" y1="14" x2="56" y2="46" stroke="#374151" stroke-width="4"/><line x1="65" y1="20" x2="65" y2="40" stroke="#374151" stroke-width="2"/></svg>`;
 const switchIcon   = () => `<svg width="40" height="28" viewBox="0 0 90 60"><line x1="0" y1="30" x2="18" y2="30" stroke="#374151" stroke-width="2"/><line x1="72" y1="30" x2="90" y2="30" stroke="#374151" stroke-width="2"/><circle cx="18" cy="30" r="4" fill="#374151"/><circle cx="72" cy="30" r="4" fill="#374151"/><line x1="18" y1="30" x2="68" y2="12" stroke="#374151" stroke-width="2.5"/></svg>`;
@@ -1025,7 +1053,6 @@ function componentLibrary() {
     { type: 'battery',  label: 'Battery',    category: 'power',   tags: 'cell voltage dc source', icon: batteryIcon(), frequent: true },
     { type: 'switch',   label: 'Switch',     category: 'input',   tags: 'toggle open close control', icon: switchIcon(), frequent: true },
     { type: 'bulb',     label: 'Light Bulb', category: 'output',  tags: 'lamp load glow light', icon: bulbIcon(), frequent: true },
-    { type: 'wire',     label: 'Wire',       category: 'wires',   tags: 'connection conductor lead', icon: wireIcon(), frequent: true },
     { type: 'buzzer',   label: 'Buzzer',     category: 'output',  tags: 'sound alarm load', icon: buzzerIcon(), frequent: false },
     { type: 'resistor', label: 'Resistor',   category: 'passive', tags: 'ohm resistance load', icon: resistorIcon(), frequent: false },
     { type: 'led',      label: 'LED',        category: 'output',  tags: 'diode light load', icon: ledIcon(), frequent: false },
@@ -1038,7 +1065,6 @@ const COMPONENT_CATEGORIES = [
   { id: 'input', label: 'Input' },
   { id: 'output', label: 'Output' },
   { id: 'passive', label: 'Passive' },
-  { id: 'wires', label: 'Wires & Connections' },
 ];
 
 function getFilteredComponents() {
@@ -1109,7 +1135,7 @@ function renderSimAdvanced() {
         `).join('')}
       </nav>
       <div class="sim-header-right">
-        <button class="btn btn-primary btn-sm" onclick="navigate('presentation')">
+        <button class="btn btn-primary btn-sm" onclick="preparePresentation()">
           FINALIZE & PRESENT
         </button>
         <div class="avatar-group">
@@ -1151,21 +1177,28 @@ function renderSimAdvanced() {
       <div class="canvas-area">
         <div class="canvas-toolbar">
           <span class="canvas-title">Project: Simple Switch Circuit — ${activeBranch.name}</span>
-          <button class="btn btn-ghost btn-sm" onclick="CircuitSim.reset()">Reset</button>
-          <span style="margin-left:auto;font-size:.75rem;color:var(--text-muted)">
-            Drag • Wire • Toggle switch
+          <button class="btn btn-ghost btn-sm" id="wiring-mode-btn" onclick="toggleWiringMode()"
+                  title="Tap two terminals to connect them">
+            ${svgIcon('zap',14)} Connect
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="resetSimulation()">Reset</button>
+          <span class="wire-mode-hint" id="wire-mode-hint">
+            Tap Connect, then tap two terminals.
           </span>
         </div>
         <div id="circuit-canvas-container">
+          <div id="canvas-feedback" class="canvas-feedback neutral">
+            Test each version before presenting it to the class.
+          </div>
           <svg id="circuit-svg" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
         <div class="collab-bar">
           <span class="collab-dot"></span>
-          Live Collaboration Active &nbsp;|&nbsp; You are editing &nbsp;|&nbsp; 3 members online
+          Group 4 online &nbsp;|&nbsp; Nicholas editing &nbsp;|&nbsp; Catherine and Jack watching
         </div>
         <div class="canvas-bottom-bar">
           <button class="btn btn-primary" id="run-btn" onclick="runSim()">▶ RUN SIMULATION</button>
-          <button class="btn btn-outline" onclick="CircuitSim.reset();updateSimStats()">Reset</button>
+          <button class="btn btn-outline" onclick="resetSimulation()">Reset</button>
         </div>
       </div>
 
@@ -1206,7 +1239,7 @@ function renderSimAdvanced() {
           </div>
         `).join('')}
         <div class="peer-quote">
-          "Nicholas, try to move that switch to close the circuit. Observe the change in the brightness of the bulb."
+          "Nicholas, close the switch and check whether the bulb is really connected back to the battery."
           <br/><span style="font-size:.72rem;opacity:.7;margin-top:4px;display:block">— Catherine</span>
         </div>
         <div class="peer-inspire-link">
@@ -1219,82 +1252,33 @@ function renderSimAdvanced() {
 
 /* ── Presentation ── */
 function renderPresentation() {
-  const step = state.presSteps[state.presStep];
-  const s = state.presStep;
-  const showSwitch = s >= 1;
-  const showBulb   = s >= 2;
-  const closed     = s >= 3;
-  const flowing    = s >= 3;
+  const snapshot = getPresentationSnapshot();
+  const steps = getPresentationSteps(snapshot);
+  if (state.presStep >= steps.length) state.presStep = steps.length - 1;
+  const step = steps[state.presStep];
+  let fallbackWidth = Math.max(340, Math.min(620, window.innerWidth ? window.innerWidth - 48 : 620));
+  if (fallbackWidth < 620) fallbackWidth = Math.min(fallbackWidth, 390);
+  const circuitSVG = window.CircuitSim?.snapshotToSVG
+    ? CircuitSim.snapshotToSVG(snapshot, { width: fallbackWidth, height: 380 })
+    : miniCircuitSVG();
+  const notes = getPresentationNotes(snapshot);
   return `
   <div class="pres-page">
     <header class="pres-header">
       <div>
         <div class="pres-presenter">Presenter: ${state.user.name} / Group 4</div>
-        <h2>FINAL PRESENTATION</h2>
+        <h2>GROUP 4 SWITCH CIRCUIT</h2>
       </div>
       <button class="btn btn-outline btn-sm" style="color:white;border-color:rgba(255,255,255,.4)"
               onclick="navigate('simulation-advanced')">
-        EXIT MODERATOR
+        EXIT PRESENTATION
       </button>
     </header>
 
     <div class="pres-body flex-1">
       <div class="pres-stage">
         <div class="pres-circuit-frame">
-          <svg width="340" height="230" viewBox="0 0 340 230" fill="none">
-            <!-- Battery (always visible) -->
-            <text x="85" y="18" font-family="Inter" font-size="11" fill="#6b7280">Battery</text>
-            <rect x="40" y="25" width="90" height="55" rx="6" fill="white" stroke="#374151" stroke-width="1.5"/>
-            <line x1="43" y1="50" x2="54" y2="50" stroke="#374151" stroke-width="2"/>
-            <line x1="54" y1="38" x2="54" y2="62" stroke="#374151" stroke-width="4"/>
-            <line x1="63" y1="44" x2="63" y2="68" stroke="#374151" stroke-width="1.8"/>
-            <line x1="72" y1="38" x2="72" y2="62" stroke="#374151" stroke-width="4"/>
-            <line x1="81" y1="44" x2="81" y2="68" stroke="#374151" stroke-width="1.8"/>
-            <line x1="118" y1="50" x2="130" y2="50" stroke="#374151" stroke-width="2"/>
-
-            ${showSwitch ? `
-              <!-- Top wire to switch + switch (open in steps 1-2, closed in step 3) -->
-              <line x1="130" y1="52" x2="186" y2="52" stroke="#374151" stroke-width="1.8"/>
-              <text x="174" y="34" font-family="Inter" font-size="10" fill="#6b7280">Switch</text>
-              <circle cx="190" cy="52" r="4" fill="#374151"/>
-              <circle cx="215" cy="52" r="4" fill="#374151"/>
-              ${closed
-                ? `<line x1="194" y1="52" x2="214" y2="52" stroke="#374151" stroke-width="2"/>`
-                : `<line x1="194" y1="52" x2="213" y2="34" stroke="#374151" stroke-width="2"/>`}
-            ` : ''}
-
-            ${showBulb ? `
-              <!-- Wire after switch, vertical to bulb, full return loop -->
-              <line x1="219" y1="52" x2="260" y2="52" stroke="#374151" stroke-width="1.8"/>
-              <line x1="260" y1="52" x2="260" y2="103" stroke="#374151" stroke-width="1.8"/>
-              <circle cx="260" cy="145" r="42"
-                      fill="${flowing ? '#fde047' : 'white'}"
-                      stroke="#374151" stroke-width="2"/>
-              ${flowing ? `
-                <circle cx="260" cy="145" r="38" fill="#fef9c3" opacity="0.9"/>
-                <circle cx="260" cy="145" r="50" fill="none" stroke="#fde047" stroke-width="1.5" opacity="0.6">
-                  <animate attributeName="r" from="42" to="62" dur="1.4s" repeatCount="indefinite"/>
-                  <animate attributeName="opacity" from="0.6" to="0" dur="1.4s" repeatCount="indefinite"/>
-                </circle>
-              ` : ''}
-              <line x1="240" y1="125" x2="280" y2="165" stroke="#374151" stroke-width="1.8"/>
-              <line x1="280" y1="125" x2="240" y2="165" stroke="#374151" stroke-width="1.8"/>
-              <text x="260" y="200" font-family="Inter" font-size="11" fill="#6b7280" text-anchor="middle">Light Bulb</text>
-              <line x1="260" y1="187" x2="260" y2="210" stroke="#374151" stroke-width="1.8"/>
-              <line x1="260" y1="210" x2="20" y2="210" stroke="#374151" stroke-width="1.8"/>
-              <line x1="20" y1="210" x2="20" y2="52" stroke="#374151" stroke-width="1.8"/>
-              <line x1="20" y1="52" x2="40" y2="52" stroke="#374151" stroke-width="1.8"/>
-            ` : ''}
-
-            ${flowing ? `
-              <!-- Animated current flow overlay -->
-              <path d="M 130 52 L 186 52 M 219 52 L 260 52 L 260 103 M 260 187 L 260 210 L 20 210 L 20 52 L 40 52"
-                    stroke="#fbbf24" stroke-width="3" fill="none" stroke-linecap="round"
-                    stroke-dasharray="6 10" opacity="0.9">
-                <animate attributeName="stroke-dashoffset" from="0" to="-32" dur="0.7s" repeatCount="indefinite"/>
-              </path>
-            ` : ''}
-          </svg>
+          ${circuitSVG}
         </div>
 
         <div class="pres-step-bar">
@@ -1307,10 +1291,10 @@ function renderPresentation() {
             ← PREV STEP
           </button>
           <div class="pres-progress-dots">
-            ${state.presSteps.map((_,i)=>`<div class="pres-pdot ${i===state.presStep?'active':''}" onclick="presNav(${i-state.presStep})"></div>`).join('')}
+            ${steps.map((_,i)=>`<div class="pres-pdot ${i===state.presStep?'active':''}" onclick="presNav(${i-state.presStep})"></div>`).join('')}
           </div>
-          <button class="pres-step-btn primary" onclick="presNav(1)" ${state.presStep===state.presSteps.length-1?'disabled style="opacity:.4"':''}>
-            NEXT STEP: ${state.presStep < state.presSteps.length-1 ? 'SHOW FLOW →' : 'DONE'}
+          <button class="pres-step-btn primary" onclick="presNav(1)" ${state.presStep===steps.length-1?'disabled style="opacity:.4"':''}>
+            ${state.presStep < steps.length-1 ? 'NEXT: FLOW →' : 'DONE'}
           </button>
         </div>
       </div>
@@ -1318,12 +1302,7 @@ function renderPresentation() {
       <div class="pres-sidebar">
         <div>
           <div class="pres-notes-title">Presenter Notes</div>
-          ${[
-            'Explain the "Broken Wire" issue I found earlier.',
-            'Demonstrate how the switch controls the light.',
-            'Mention why we chose a light over a buzzer.',
-            'Tell the class: "What happens if we add a second?"',
-          ].map((n,i) => `
+          ${notes.map((n,i) => `
             <div class="pres-note-item">
               <div class="pres-note-num">${i+1}</div>
               <div>${n}</div>
@@ -1347,6 +1326,43 @@ function renderPresentation() {
       </div>
     </div>
   </div>`;
+}
+
+function getPresentationSnapshot() {
+  return state.presentationSnapshot || state.branchSnapshots[state.branchActive] || null;
+}
+
+function getSnapshotLoadLabels(snapshot) {
+  const labels = {
+    bulb: 'light bulb',
+    buzzer: 'buzzer',
+    led: 'LED',
+    resistor: 'resistor',
+  };
+  const found = (snapshot?.components || [])
+    .filter(c => labels[c.type])
+    .map(c => labels[c.type]);
+  return found.length ? Array.from(new Set(found)) : ['light bulb'];
+}
+
+function getPresentationSteps(snapshot) {
+  const outputs = getSnapshotLoadLabels(snapshot).join(' and ');
+  return [
+    'First, the battery provides electrical energy for our circuit.',
+    'When the switch is closed, the circuit loop is complete.',
+    `Current flows through the connected ${outputs}, so we can see the result immediately.`,
+    'If a wire is missing or placed incorrectly, the loop breaks and the output stays off.',
+  ];
+}
+
+function getPresentationNotes(snapshot) {
+  const outputs = getSnapshotLoadLabels(snapshot).join(' / ');
+  return [
+    'Point out the battery, switch, connected wires, and output component.',
+    'Show how closing the switch changes the circuit from open to closed.',
+    `Explain why this design uses ${outputs} as the output.`,
+    'Compare it with another group version, such as a buzzer or second switch design.',
+  ];
 }
 
 /* ── Reference ── */
@@ -1694,6 +1710,7 @@ function bindPage(page) {
         if (page === 'simulation-advanced' && state.branchSnapshots[state.branchActive]) {
           CircuitSim.importState(state.branchSnapshots[state.branchActive]);
         }
+        updateWireModeUI();
         updateSimStats(CircuitSim.getStats());
       }
     }, 50);
@@ -1824,18 +1841,14 @@ function runSim() {
   const btn = document.getElementById('run-btn');
   if (result.closed) {
     if (btn) btn.textContent = '⏹ STOP SIMULATION';
-    btn.onclick = stopSimWrapper;
-    showToast('Circuit complete! Current is flowing.', 'success');
+    if (btn) btn.onclick = stopSimWrapper;
+    showToast('Circuit complete. Current is flowing.', 'success');
   } else {
-    const reason = {
-      no_battery: 'add a battery',
-      no_load: 'add a load (bulb/buzzer/resistor)',
-      switch_open: 'switch is open',
-      incomplete: 'check terminal connections',
-    }[result.reason] || 'check connections';
-    showToast('Circuit incomplete — ' + reason, 'warning');
+    if (btn) { btn.textContent = '▶ RUN SIMULATION'; btn.onclick = runSim; }
+    showToast(result.message || 'Circuit incomplete. Check the connections.', 'warning');
   }
   updateSimStats(CircuitSim.getStats());
+  saveActiveBranchSnapshot();
 }
 
 function stopSimWrapper() {
@@ -1847,6 +1860,7 @@ function stopSimWrapper() {
 
 function updateSimStats(stats) {
   if (!stats) stats = CircuitSim?.getStats?.() || {};
+  const result = stats.result || CircuitSim?.getCircuitResult?.();
   const vEl = document.getElementById('stat-voltage');
   const iEl = document.getElementById('stat-current');
   const sEl = document.getElementById('stat-status');
@@ -1860,11 +1874,12 @@ function updateSimStats(stats) {
   }
   if (hEl) {
     if (stats.ok) {
-      hEl.textContent = `Great work! The circuit is complete. Current = ${stats.voltage}V ÷ R = ${stats.current}A flowing through the load.`;
+      const loadCount = result?.activeLoadIds?.length || 1;
+      hEl.textContent = `Great work. ${loadCount} connected output${loadCount > 1 ? 's are' : ' is'} active, and current is flowing through the closed loop.`;
     } else if (stats.status === 'Open circuit') {
-      hEl.textContent = 'Toggle the switch to close the circuit. Then press RUN to see the simulation.';
+      hEl.textContent = 'Close the switch, then press Run to see the current flow.';
     } else if (stats.status === 'Incomplete circuit') {
-      hEl.textContent = 'Complete the loop by connecting the battery, switch, load, and return path with wires.';
+      hEl.textContent = result?.message || 'Complete the loop by connecting the battery, switch, load, and return path.';
     } else if (stats.status === 'No battery') {
       hEl.textContent = 'Add a battery to provide voltage for the circuit.';
     } else if (stats.status === 'No load') {
@@ -1873,11 +1888,64 @@ function updateSimStats(stats) {
       hEl.textContent = 'Try adding a battery and a light bulb, then connect them with wires.';
     }
   }
+  updateCanvasFeedback(result, stats.ok);
+  updateWireModeUI();
 }
 
 function toggleWiringMode() {
+  if (!window.CircuitSim?.setWiringMode) return;
+  const next = !CircuitSim.isWiringMode();
+  CircuitSim.setWiringMode(next);
+  updateWireModeUI();
+  updateCanvasFeedback(
+    next
+      ? { closed: false, reason: 'wiring', message: 'Connect mode is on. Tap one terminal, then tap another terminal to add a wire.' }
+      : CircuitSim.getCircuitResult(),
+    false
+  );
+}
+
+function updateWireModeUI() {
+  const active = Boolean(window.CircuitSim?.isWiringMode?.());
   const btn = document.getElementById('wiring-mode-btn');
-  if (btn) btn.classList.toggle('active');
+  const hint = document.getElementById('wire-mode-hint');
+  if (btn) {
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  }
+  if (hint) {
+    hint.textContent = active
+      ? 'Connect mode on: tap two terminals.'
+      : 'Tap Connect, then tap two terminals.';
+  }
+}
+
+function updateCanvasFeedback(result, ok = false) {
+  const el = document.getElementById('canvas-feedback');
+  if (!el || !result) return;
+  el.className = 'canvas-feedback ' + (ok || result.closed ? 'success' : result.reason === 'wiring' ? 'info' : 'warning');
+  el.textContent = result.closed
+    ? 'Circuit complete. The connected output is active and current is flowing.'
+    : (result.message || 'The circuit is not complete yet.');
+}
+
+function resetSimulation() {
+  if (!window.CircuitSim) return;
+  CircuitSim.reset();
+  updateSimStats(CircuitSim.getStats());
+  updateWireModeUI();
+  const btn = document.getElementById('run-btn');
+  if (btn) { btn.textContent = '▶ RUN SIMULATION'; btn.onclick = runSim; }
+  saveActiveBranchSnapshot();
+}
+
+function preparePresentation() {
+  saveActiveBranchSnapshot();
+  if (window.CircuitSim?.exportState) {
+    state.presentationSnapshot = CircuitSim.exportState();
+  }
+  state.presStep = 0;
+  navigate('presentation');
 }
 
 function saveActiveBranchSnapshot() {
@@ -1943,8 +2011,9 @@ function removeTeamMember(idx) {
 
 /* ── Presentation ── */
 function presNav(delta) {
+  const steps = getPresentationSteps(getPresentationSnapshot());
   const newIdx = state.presStep + delta;
-  if (newIdx < 0 || newIdx >= state.presSteps.length) return;
+  if (newIdx < 0 || newIdx >= steps.length) return;
   state.presStep = newIdx;
   navigate('presentation');
 }

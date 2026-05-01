@@ -1,6 +1,6 @@
 /* ─── Circuit Lab Simulation Engine ──────────────────────────────────────
    SVG-based drag-and-drop circuit builder with live simulation.
-   Components: Battery, Switch, Light Bulb, Wire, Buzzer, Resistor, LED
+   Components: Battery, Switch, Light Bulb, Buzzer, Resistor, LED
 ─────────────────────────────────────────────────────────────────────── */
 
 /* ── Component definitions ── */
@@ -122,8 +122,11 @@ let simState = {
   nextId: 1,
   dragging: null,       // {compId, offsetX, offsetY}
   wiringFrom: null,     // {compId, terminal, x, y}
+  wiringMode: false,
   mouseX: 0, mouseY: 0,
   running: false,
+  lastRunAttempted: false,
+  lastResult: null,
   animOffset: 0,
   animTimer: null,
   svgEl: null,
@@ -139,6 +142,10 @@ window.CircuitSim = {
   runSimulation,
   stopSimulation,
   getStats,
+  getCircuitResult,
+  setWiringMode,
+  isWiringMode,
+  snapshotToSVG,
   exportState,
   importState,
 };
@@ -151,34 +158,58 @@ function init(svgId, canvasId, onStatsChange) {
   simState.wires = [];
   simState.nextId = 1;
   simState.running = false;
+  simState.lastRunAttempted = false;
+  simState.lastResult = null;
   simState.wiringFrom = null;
+  simState.wiringMode = false;
   simState.dragging = null;
 
   setupDefaultCircuit();
   bindEvents();
   render();
+  updateStats();
+}
+
+function createDefaultCircuitData(W = 600, H = 480) {
+  // Responsive positions: use proportions of the canvas
+  const cx = W / 2;
+  const cy = H / 2;
+  const compact = W <= 520;
+  const batteryX = compact ? Math.max(16, W * 0.08) : Math.max(20, cx - W * 0.38);
+  const batteryY = compact ? cy - 30 : cy - 20;
+  const switchX = compact ? Math.max(132, W * 0.46) : Math.max(20, cx - W * 0.06);
+  const switchY = compact ? Math.max(44, cy - H * 0.22) : Math.max(30, cy - H * 0.25);
+  const bulbX = compact ? Math.min(W - 96, W * 0.66) : Math.min(W - 100, cx + W * 0.22);
+  const bulbY = compact ? cy - 42 : cy - 40;
+
+  return {
+    components: [
+      { id: 'bat1',  type: 'battery', x: batteryX, y: batteryY, state: null },
+      { id: 'sw1',   type: 'switch',  x: switchX,  y: switchY,  state: 'open' },
+      { id: 'bulb1', type: 'bulb',    x: bulbX,    y: bulbY,    state: null },
+    ],
+    wires: [
+      { id: 'w1', from: { compId: 'bat1',  terminal: 'pos'    }, to: { compId: 'sw1',   terminal: 'in'     } },
+      { id: 'w2', from: { compId: 'sw1',   terminal: 'out'    }, to: { compId: 'bulb1', terminal: 'top'    } },
+      { id: 'w3', from: { compId: 'bulb1', terminal: 'bottom' }, to: { compId: 'bat1',  terminal: 'neg'    } },
+    ],
+    nextId: 10,
+  };
 }
 
 function setupDefaultCircuit() {
   const svg = simState.svgEl;
-  const W = svg ? (svg.getBoundingClientRect().width  || 600) : 600;
-  const H = svg ? (svg.getBoundingClientRect().height || 480) : 480;
-
-  // Responsive positions: use proportions of the canvas
-  const cx = W / 2;
-  const cy = H / 2;
-
-  simState.components = [
-    { id: 'bat1',  type: 'battery', x: Math.max(20, cx - W * 0.38), y: cy - 20, state: null },
-    { id: 'sw1',   type: 'switch',  x: Math.max(20, cx - W * 0.06), y: Math.max(30, cy - H * 0.25), state: 'open' },
-    { id: 'bulb1', type: 'bulb',    x: Math.min(W - 100, cx + W * 0.22), y: cy - 40, state: null },
-  ];
-  simState.wires = [
-    { id: 'w1', from: { compId: 'bat1',  terminal: 'pos'    }, to: { compId: 'sw1',   terminal: 'in'     } },
-    { id: 'w2', from: { compId: 'sw1',   terminal: 'out'    }, to: { compId: 'bulb1', terminal: 'top'    } },
-    { id: 'w3', from: { compId: 'bulb1', terminal: 'bottom' }, to: { compId: 'bat1',  terminal: 'neg'    } },
-  ];
-  simState.nextId = 10;
+  const svgRect = svg?.getBoundingClientRect();
+  const canvasRect = simState.canvasEl?.getBoundingClientRect();
+  const measuredW = canvasRect?.width || svgRect?.width || 600;
+  const viewportW = window.innerWidth || measuredW;
+  let W = Math.max(320, Math.min(measuredW, viewportW));
+  if (W < 620) W = Math.min(W, 390);
+  const H = Math.max(360, canvasRect?.height || svgRect?.height || 480);
+  const defaults = createDefaultCircuitData(W, H);
+  simState.components = defaults.components;
+  simState.wires = defaults.wires;
+  simState.nextId = defaults.nextId;
 }
 
 function addComponent(type) {
@@ -190,7 +221,10 @@ function addComponent(type) {
   const cy = (rect.height / 2 - def.h / 2) + (Math.random() - 0.5) * 60;
   const id = type.slice(0, 3) + (simState.nextId++);
   simState.components.push({ id, type, x: Math.max(10, cx), y: Math.max(10, cy), state: type === 'switch' ? 'open' : null });
+  if (simState.running) stopSimulation();
+  simState.lastRunAttempted = false;
   render();
+  updateStats();
 }
 
 function cloneCircuitData() {
@@ -202,6 +236,7 @@ function cloneCircuitData() {
       to: { ...w.to },
     })),
     nextId: simState.nextId,
+    lastResult: getCircuitResult(),
   };
 }
 
@@ -222,7 +257,10 @@ function importState(snapshot) {
   }));
   simState.nextId = snapshot.nextId || 1;
   simState.wiringFrom = null;
+  simState.wiringMode = false;
   simState.dragging = null;
+  simState.lastRunAttempted = false;
+  simState.lastResult = snapshot.lastResult || null;
   render();
   updateStats();
   return true;
@@ -231,14 +269,23 @@ function importState(snapshot) {
 function reset() {
   stopSimulation();
   simState.wiringFrom = null;
+  simState.wiringMode = false;
   simState.dragging = null;
+  simState.lastRunAttempted = false;
+  simState.lastResult = null;
   setupDefaultCircuit();
   render();
   updateStats();
 }
 
 function runSimulation() {
-  const valid = validateCircuit();
+  if (simState.animTimer) {
+    cancelAnimationFrame(simState.animTimer);
+    simState.animTimer = null;
+  }
+  const valid = analyzeCircuit();
+  simState.lastRunAttempted = true;
+  simState.lastResult = valid;
   simState.running = valid.closed;
   if (simState.running) {
     startAnimation();
@@ -262,10 +309,27 @@ function getStats() {
   return calcStats();
 }
 
+function getCircuitResult() {
+  const result = analyzeCircuit();
+  simState.lastResult = result;
+  return result;
+}
+
+function setWiringMode(enabled) {
+  simState.wiringMode = Boolean(enabled);
+  if (!simState.wiringMode) simState.wiringFrom = null;
+  render();
+  return simState.wiringMode;
+}
+
+function isWiringMode() {
+  return simState.wiringMode;
+}
+
 /* ── Circuit analysis ── */
-function validateCircuit() {
-  const comps = simState.components;
-  const wires = simState.wires;
+function analyzeCircuit(data = simState) {
+  const comps = data.components || [];
+  const wires = data.wires || [];
 
   const batteries = comps.filter(c => c.type === 'battery');
   const hasBattery = batteries.length > 0;
@@ -273,68 +337,207 @@ function validateCircuit() {
   const switches = comps.filter(c => c.type === 'switch');
   const switchOpen = switches.some(c => c.state === 'open');
 
-  if (!hasBattery) return { closed: false, reason: 'no_battery' };
-  if (!hasLoad) return { closed: false, reason: 'no_load' };
+  const disconnectedTerminals = getDisconnectedTerminals(comps, wires);
+  const baseResult = {
+    closed: false,
+    reason: 'incomplete',
+    activeLoadIds: [],
+    activeWireIds: [],
+    warningWireIds: [],
+    disconnectedTerminals,
+    openSwitchIds: switches.filter(c => c.state === 'open').map(c => c.id),
+    message: 'Complete the loop by connecting the battery, switch, load, and return path.',
+  };
 
+  if (!hasBattery) {
+    return {
+      ...baseResult,
+      reason: 'no_battery',
+      message: 'Add a battery to provide voltage for the circuit.',
+    };
+  }
+  if (!hasLoad) {
+    return {
+      ...baseResult,
+      reason: 'no_load',
+      message: 'Add a load such as a light bulb, buzzer, LED, or resistor.',
+    };
+  }
+
+  const bat = batteries[0];
+  const startKey = terminalKey(bat.id, 'pos');
+  const endKey = terminalKey(bat.id, 'neg');
+  const activeLoadIds = new Set();
+  const activeWireIds = new Set();
+  const activePathNodeKeys = new Set();
+
+  for (const load of comps.filter(c => isLoadType(c.type))) {
+    const terminals = getComponentTerminals(load);
+    if (terminals.length < 2) continue;
+
+    const graphWithoutLoad = buildGraph(comps, wires, { excludedLoadId: load.id });
+    const a = terminalKey(load.id, terminals[0]);
+    const b = terminalKey(load.id, terminals[1]);
+    const posToA = isReachable(graphWithoutLoad, startKey, a);
+    const negToB = isReachable(graphWithoutLoad, endKey, b);
+    const posToB = isReachable(graphWithoutLoad, startKey, b);
+    const negToA = isReachable(graphWithoutLoad, endKey, a);
+
+    if ((posToA && negToB) || (posToB && negToA)) {
+      activeLoadIds.add(load.id);
+      const path = findPathThroughLoad(comps, wires, startKey, endKey, load.id);
+      for (const wireId of path.wireIds) activeWireIds.add(wireId);
+      for (const nodeKey of path.nodeKeys) activePathNodeKeys.add(nodeKey);
+    }
+  }
+
+  if (activeLoadIds.size > 0) {
+    return {
+      ...baseResult,
+      closed: true,
+      reason: 'closed',
+      activeLoadIds: Array.from(activeLoadIds),
+      activeWireIds: Array.from(activeWireIds),
+      activePathNodeKeys: Array.from(activePathNodeKeys),
+      warningWireIds: [],
+      message: 'Circuit complete. Current is flowing through the connected load.',
+    };
+  }
+
+  if (switchOpen) {
+    return {
+      ...baseResult,
+      reason: 'switch_open',
+      warningWireIds: [],
+      message: 'Close the switch to complete the circuit.',
+    };
+  }
+
+  return {
+    ...baseResult,
+    warningWireIds: wires.map(w => w.id),
+    message: disconnectedTerminals.length
+      ? 'A terminal is not connected. Complete the loop back to the battery.'
+      : 'This load is not connected back to the battery. Check the wire path.',
+  };
+}
+
+function buildGraph(comps, wires, options = {}) {
   const adj = {};
-  const addAdj = (from, to, throughLoad = false) => {
+  const addAdj = (from, edge) => {
     if (!adj[from]) adj[from] = [];
-    adj[from].push({ key: to, throughLoad });
+    adj[from].push(edge);
   };
-  const addEdge = (a, b, throughLoad = false) => {
-    addAdj(a, b, throughLoad);
-    addAdj(b, a, throughLoad);
+  const addEdge = (a, b, meta = {}) => {
+    addAdj(a, { key: b, ...meta });
+    addAdj(b, { key: a, ...meta });
   };
 
-  const terminalKey = (compId, terminal) => `${compId}:${terminal}`;
-
-  // External wires connect two component terminals.
   for (const w of wires) {
     addEdge(
       terminalKey(w.from.compId, w.from.terminal),
       terminalKey(w.to.compId, w.to.terminal),
-      false
+      { type: 'wire', wireId: w.id }
     );
   }
 
-  // Internal component behavior controls whether current can pass through it.
   for (const comp of comps) {
-    const def = COMP_DEFS[comp.type];
-    if (!def) continue;
-    const terminals = Object.keys(def.terminals);
+    const terminals = getComponentTerminals(comp);
     if (terminals.length < 2 || comp.type === 'battery') continue;
     if (comp.type === 'switch' && comp.state !== 'closed') continue;
+    if (isLoadType(comp.type) && comp.id === options.excludedLoadId) continue;
 
-    const throughLoad = isLoadType(comp.type);
+    const isLoad = isLoadType(comp.type);
     addEdge(
       terminalKey(comp.id, terminals[0]),
       terminalKey(comp.id, terminals[1]),
-      throughLoad
+      { type: 'internal', loadId: isLoad ? comp.id : null }
     );
   }
 
-  const bat = batteries[0];
-  const startKey = bat.id + ':pos';
-  const endKey = bat.id + ':neg';
-  const visited = new Set([startKey + '|0']);
-  const queue = [{ key: startKey, seenLoad: false }];
+  return adj;
+}
 
-  while (queue.length > 0) {
+function isReachable(adj, startKey, endKey) {
+  if (startKey === endKey) return true;
+  const visited = new Set([startKey]);
+  const queue = [startKey];
+
+  while (queue.length) {
     const current = queue.shift();
-    if (current.key === endKey && current.seenLoad) {
-      return { closed: true, reason: 'closed' };
-    }
-
-    for (const edge of adj[current.key] || []) {
-      const seenLoad = current.seenLoad || edge.throughLoad;
-      const visitKey = edge.key + '|' + (seenLoad ? '1' : '0');
-      if (visited.has(visitKey)) continue;
-      visited.add(visitKey);
-      queue.push({ key: edge.key, seenLoad });
+    for (const edge of adj[current] || []) {
+      if (edge.key === endKey) return true;
+      if (visited.has(edge.key)) continue;
+      visited.add(edge.key);
+      queue.push(edge.key);
     }
   }
 
-  return { closed: false, reason: switchOpen ? 'switch_open' : 'incomplete' };
+  return false;
+}
+
+function findPathThroughLoad(comps, wires, startKey, endKey, targetLoadId) {
+  const adj = buildGraph(comps, wires);
+  const visited = new Set([`${startKey}|0`]);
+  const queue = [{ key: startKey, seenTarget: false, path: [] }];
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (current.key === endKey && current.seenTarget) {
+      const wireIds = current.path.filter(e => e.wireId).map(e => e.wireId);
+      const nodeKeys = [startKey, ...current.path.map(e => e.to)];
+      return { wireIds, nodeKeys };
+    }
+
+    for (const edge of adj[current.key] || []) {
+      const seenTarget = current.seenTarget || edge.loadId === targetLoadId;
+      const visitKey = `${edge.key}|${seenTarget ? 1 : 0}`;
+      if (visited.has(visitKey)) continue;
+      visited.add(visitKey);
+      queue.push({
+        key: edge.key,
+        seenTarget,
+        path: current.path.concat([{ ...edge, from: current.key, to: edge.key }]),
+      });
+    }
+  }
+
+  return { wireIds: [], nodeKeys: [] };
+}
+
+function getDisconnectedTerminals(comps, wires) {
+  const connected = new Set();
+  for (const w of wires) {
+    connected.add(terminalKey(w.from.compId, w.from.terminal));
+    connected.add(terminalKey(w.to.compId, w.to.terminal));
+  }
+
+  const result = [];
+  for (const comp of comps) {
+    const def = COMP_DEFS[comp.type];
+    if (!def) continue;
+    for (const terminal of Object.keys(def.terminals)) {
+      const key = terminalKey(comp.id, terminal);
+      if (!connected.has(key)) {
+        result.push({
+          compId: comp.id,
+          terminal,
+          key,
+          label: `${def.label} ${terminal}`,
+        });
+      }
+    }
+  }
+  return result;
+}
+
+function terminalKey(compId, terminal) {
+  return `${compId}:${terminal}`;
+}
+
+function getComponentTerminals(comp) {
+  const def = COMP_DEFS[comp.type];
+  return def ? Object.keys(def.terminals) : [];
 }
 
 function isLoadType(type) {
@@ -342,8 +545,8 @@ function isLoadType(type) {
 }
 
 function calcStats() {
+  const result = analyzeCircuit();
   if (!simState.running) {
-    const valid = validateCircuit();
     const statusByReason = {
       no_battery: 'No battery',
       no_load: 'No load',
@@ -351,21 +554,21 @@ function calcStats() {
       incomplete: 'Incomplete circuit',
     };
     return {
-      voltage: valid.reason === 'no_battery' ? '0.0' : '9.0',
+      voltage: result.reason === 'no_battery' ? '0.0' : '9.0',
       current: '0.00',
-      status: statusByReason[valid.reason] || 'Not running',
+      status: statusByReason[result.reason] || 'Not running',
       ok: false,
+      result,
     };
   }
-  const bulbs  = simState.components.filter(c => c.type === 'bulb').length  || 0;
-  const leds   = simState.components.filter(c => c.type === 'led').length   || 0;
-  const buzzers= simState.components.filter(c => c.type === 'buzzer').length || 0;
-  const resistors = simState.components.filter(c => c.type === 'resistor').length || 0;
-
-  const R = (bulbs * 10) + (leds * 5) + (buzzers * 8) + (resistors * 10) || 10;
+  const resistanceByType = { bulb: 10, led: 5, buzzer: 8, resistor: 10 };
+  const R = result.activeLoadIds
+    .map(id => simState.components.find(c => c.id === id))
+    .filter(Boolean)
+    .reduce((sum, comp) => sum + (resistanceByType[comp.type] || 10), 0) || 10;
   const V = 9.0;
   const I = V / R;
-  return { voltage: V.toFixed(1), current: I.toFixed(2), status: 'Running', ok: true };
+  return { voltage: V.toFixed(1), current: I.toFixed(2), status: 'Running', ok: true, result };
 }
 
 function updateStats() {
@@ -374,6 +577,7 @@ function updateStats() {
 
 /* ── Animation ── */
 function startAnimation() {
+  if (simState.animTimer) cancelAnimationFrame(simState.animTimer);
   const tick = () => {
     if (!simState.running) return;
     simState.animOffset = (simState.animOffset + 2) % 100;
@@ -387,6 +591,7 @@ function startAnimation() {
 function render() {
   const svg = simState.svgEl;
   if (!svg) return;
+  syncSvgViewport();
   svg.innerHTML = '';
 
   // Defs for glow filter
@@ -419,10 +624,24 @@ function render() {
   renderTempWire();
 }
 
+function syncSvgViewport() {
+  const svg = simState.svgEl;
+  if (!svg) return;
+  const rect = simState.canvasEl?.getBoundingClientRect() || svg.getBoundingClientRect();
+  const width = Math.max(320, Math.round(rect.width || 600));
+  const height = Math.max(360, Math.round(rect.height || 480));
+  svg.setAttribute('width', width);
+  svg.setAttribute('height', height);
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+}
+
 function renderWires() {
   const wireGroup = simState.svgEl?.querySelector('#sim-wires');
   if (!wireGroup) return;
   wireGroup.innerHTML = '';
+  const result = analyzeCircuit();
+  const activeWireIds = new Set(result.activeWireIds || []);
+  const warningWireIds = new Set(result.warningWireIds || []);
 
   for (const w of simState.wires) {
     const fp = getTerminalPos(w.from.compId, w.from.terminal);
@@ -431,8 +650,11 @@ function renderWires() {
 
     const path = mkSvg('path');
     path.setAttribute('d', orthoPath(fp, tp));
-    path.setAttribute('class', 'circuit-wire' + (simState.running ? ' animated' : ''));
-    if (simState.running) {
+    const classes = ['circuit-wire'];
+    if (simState.running && activeWireIds.has(w.id)) classes.push('animated');
+    if (simState.lastRunAttempted && !result.closed && warningWireIds.has(w.id)) classes.push('warn');
+    path.setAttribute('class', classes.join(' '));
+    if (simState.running && activeWireIds.has(w.id)) {
       path.style.strokeDashoffset = -simState.animOffset;
     }
     path.dataset.wireId = w.id;
@@ -444,12 +666,18 @@ function renderComponents() {
   const compGroup = simState.svgEl?.querySelector('#sim-comps');
   if (!compGroup) return;
   compGroup.innerHTML = '';
+  const result = analyzeCircuit();
+  const activeLoadIds = new Set(result.activeLoadIds || []);
+  const disconnectedTerminalKeys = new Set(
+    simState.lastRunAttempted && !result.closed
+      ? (result.disconnectedTerminals || []).map(t => t.key)
+      : []
+  );
 
   for (const comp of simState.components) {
     const def = COMP_DEFS[comp.type];
     if (!def) continue;
-    const isGlowing = simState.running &&
-      (comp.type === 'bulb' || comp.type === 'led' || comp.type === 'buzzer');
+    const isGlowing = simState.running && activeLoadIds.has(comp.id);
 
     const g = mkSvg('g');
     g.setAttribute('transform', `translate(${Math.round(comp.x)},${Math.round(comp.y)})`);
@@ -468,8 +696,11 @@ function renderComponents() {
       const tc = mkSvg('circle');
       tc.setAttribute('cx', tPos[0]);
       tc.setAttribute('cy', tPos[1]);
-      tc.setAttribute('r', 8);
-      tc.setAttribute('class', 'comp-terminal');
+      tc.setAttribute('r', simState.wiringMode ? 12 : 10);
+      const terminalClasses = ['comp-terminal'];
+      if (simState.wiringMode) terminalClasses.push('wiring-enabled');
+      if (disconnectedTerminalKeys.has(terminalKey(comp.id, tName))) terminalClasses.push('warn');
+      tc.setAttribute('class', terminalClasses.join(' '));
       tc.dataset.compId = comp.id;
       tc.dataset.terminal = tName;
       if (simState.wiringFrom &&
@@ -509,6 +740,73 @@ function renderTempWire() {
   tempGroup.appendChild(path);
 }
 
+function snapshotToSVG(snapshot, options = {}) {
+  const data = snapshot && Array.isArray(snapshot.components) && Array.isArray(snapshot.wires)
+    ? snapshot
+    : createDefaultCircuitData(options.width || 560, options.height || 360);
+  const result = snapshot?.lastResult || analyzeCircuit(data);
+  const activeLoadIds = new Set(result.activeLoadIds || []);
+  const activeWireIds = new Set(result.activeWireIds || []);
+  const bounds = getCircuitBounds(data.components);
+  const pad = options.padding ?? 44;
+  const viewBox = [
+    Math.floor(bounds.minX - pad),
+    Math.floor(bounds.minY - pad),
+    Math.ceil(bounds.maxX - bounds.minX + pad * 2),
+    Math.ceil(bounds.maxY - bounds.minY + pad * 2),
+  ].join(' ');
+
+  const wireMarkup = data.wires.map(w => {
+    const fp = getTerminalPosFromData(data.components, w.from.compId, w.from.terminal);
+    const tp = getTerminalPosFromData(data.components, w.to.compId, w.to.terminal);
+    if (!fp || !tp) return '';
+    const cls = ['circuit-wire'];
+    if (activeWireIds.has(w.id)) cls.push('animated');
+    return `<path d="${orthoPath(fp, tp)}" class="${cls.join(' ')}"/>`;
+  }).join('');
+
+  const compMarkup = data.components.map(comp => {
+    const def = COMP_DEFS[comp.type];
+    if (!def) return '';
+    const glowing = activeLoadIds.has(comp.id);
+    return `<g transform="translate(${Math.round(comp.x)},${Math.round(comp.y)})" class="snapshot-comp">${def.symbol(comp.state, glowing)}</g>`;
+  }).join('');
+
+  return `
+  <svg class="snapshot-circuit-svg" viewBox="${viewBox}" role="img" aria-label="Group 4 circuit design">
+    <defs>
+      <filter id="snapshot-bulb-glow-filter" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <g class="snapshot-wire-layer">${wireMarkup}</g>
+    <g class="snapshot-comp-layer">${compMarkup}</g>
+  </svg>`;
+}
+
+function getCircuitBounds(components) {
+  if (!components.length) return { minX: 0, minY: 0, maxX: 560, maxY: 360 };
+  return components.reduce((bounds, comp) => {
+    const def = COMP_DEFS[comp.type] || { w: 80, h: 80 };
+    return {
+      minX: Math.min(bounds.minX, comp.x),
+      minY: Math.min(bounds.minY, comp.y),
+      maxX: Math.max(bounds.maxX, comp.x + def.w),
+      maxY: Math.max(bounds.maxY, comp.y + def.h),
+    };
+  }, { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+}
+
+function getTerminalPosFromData(components, compId, terminal) {
+  const comp = components.find(c => c.id === compId);
+  if (!comp) return null;
+  const def = COMP_DEFS[comp.type];
+  if (!def || !def.terminals[terminal]) return null;
+  const t = def.terminals[terminal];
+  return { x: comp.x + t[0], y: comp.y + t[1] };
+}
+
 /* ── Path routing ── */
 function orthoPath(from, to) {
   const fx = from.x, fy = from.y;
@@ -543,11 +841,12 @@ function bindEvents() {
   const svg = simState.svgEl;
   if (!svg) return;
 
-  // Pointer events for drag + wire
-  svg.addEventListener('mousedown', onMouseDown);
-  svg.addEventListener('mousemove', onMouseMove);
-  svg.addEventListener('mouseup', onMouseUp);
-  svg.addEventListener('mouseleave', onMouseLeave);
+  svg.style.touchAction = 'none';
+  svg.addEventListener('pointerdown', onPointerDown);
+  svg.addEventListener('pointermove', onPointerMove);
+  svg.addEventListener('pointerup', onPointerUp);
+  svg.addEventListener('pointercancel', onPointerCancel);
+  svg.addEventListener('pointerleave', onPointerCancel);
 
   // Drag from component sidebar
   const canvasEl = simState.canvasEl;
@@ -557,13 +856,13 @@ function bindEvents() {
   }
 }
 
-function onMouseDown(e) {
+function onPointerDown(e) {
   const svg = simState.svgEl;
   if (!svg) return;
 
-  // Terminal click → start wiring
+  // Terminal click -> start or complete wiring when Connect mode is enabled.
   const terminal = e.target.closest('[data-terminal]');
-  if (terminal) {
+  if (terminal && simState.wiringMode) {
     e.preventDefault();
     const compId = terminal.dataset.compId;
     const tname  = terminal.dataset.terminal;
@@ -580,7 +879,9 @@ function onMouseDown(e) {
         });
         simState.wiringFrom = null;
         if (simState.running) stopSimulation();
+        simState.lastRunAttempted = false;
         render();
+        updateStats();
       } else {
         simState.wiringFrom = null;
         render();
@@ -595,12 +896,22 @@ function onMouseDown(e) {
   // Switch toggle click
   const switchHit = e.target.closest('[data-switch-id]');
   if (switchHit) {
+    e.preventDefault();
     const comp = simState.components.find(c => c.id === switchHit.dataset.switchId);
     if (comp) {
-      comp.state = comp.state === 'open' ? 'closed' : 'open';
-      if (simState.running) stopSimulation();
-      render();
-      updateStats();
+      const pos = svgCoords(simState.svgEl, e.clientX, e.clientY);
+      if (svg.setPointerCapture) {
+        try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+      simState.dragging = {
+        compId: comp.id,
+        offsetX: pos.x - comp.x,
+        offsetY: pos.y - comp.y,
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        moved: false,
+        toggleOnClick: true,
+      };
     }
     return;
   }
@@ -613,10 +924,17 @@ function onMouseDown(e) {
     const comp = simState.components.find(c => c.id === compId);
     if (!comp) return;
     const pos = svgCoords(simState.svgEl, e.clientX, e.clientY);
+    if (svg.setPointerCapture) {
+      try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+    }
     simState.dragging = {
       compId,
       offsetX: pos.x - comp.x,
       offsetY: pos.y - comp.y,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      moved: false,
+      toggleOnClick: false,
     };
     return;
   }
@@ -628,7 +946,7 @@ function onMouseDown(e) {
   }
 }
 
-function onMouseMove(e) {
+function onPointerMove(e) {
   const svg = simState.svgEl;
   if (!svg) return;
   const pos = svgCoords(svg, e.clientX, e.clientY);
@@ -638,8 +956,12 @@ function onMouseMove(e) {
   if (simState.dragging) {
     const comp = simState.components.find(c => c.id === simState.dragging.compId);
     if (comp) {
+      const dx = e.clientX - simState.dragging.startClientX;
+      const dy = e.clientY - simState.dragging.startClientY;
+      if (Math.hypot(dx, dy) > 4) simState.dragging.moved = true;
       comp.x = Math.max(0, pos.x - simState.dragging.offsetX);
       comp.y = Math.max(0, pos.y - simState.dragging.offsetY);
+      if (simState.running) stopSimulation();
       renderWires();
       renderComponents();
     }
@@ -648,11 +970,25 @@ function onMouseMove(e) {
   }
 }
 
-function onMouseUp(e) {
+function onPointerUp(e) {
+  if (simState.dragging) {
+    const drag = simState.dragging;
+    if (drag.toggleOnClick && !drag.moved) {
+      if (simState.running) stopSimulation();
+      const comp = simState.components.find(c => c.id === drag.compId);
+      if (comp) comp.state = comp.state === 'open' ? 'closed' : 'open';
+    }
+    simState.lastRunAttempted = false;
+    render();
+    updateStats();
+  }
   simState.dragging = null;
+  if (simState.svgEl?.releasePointerCapture) {
+    try { simState.svgEl.releasePointerCapture(e.pointerId); } catch (_) {}
+  }
 }
 
-function onMouseLeave() {
+function onPointerCancel() {
   simState.dragging = null;
 }
 
@@ -672,6 +1008,7 @@ function onDrop(e) {
     state: type === 'switch' ? 'open' : null
   });
   if (simState.running) stopSimulation();
+  simState.lastRunAttempted = false;
   render();
   updateStats();
 }
@@ -683,6 +1020,7 @@ document.addEventListener('dblclick', (e) => {
   const wireId = wireEl.dataset.wireId;
   simState.wires = simState.wires.filter(w => w.id !== wireId);
   if (simState.running) stopSimulation();
+  simState.lastRunAttempted = false;
   render();
   updateStats();
 });
