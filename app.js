@@ -988,52 +988,32 @@ function renderSimulation() {
       </div>
 
       <!-- Task panel -->
-      <div class="stats-panel">
-        <div class="stats-panel-title">Lesson Task</div>
+      <div class="stats-panel task-intro-panel">
+        <div class="stats-panel-title">Task Brief</div>
         <div class="task-brief">
           <div class="task-brief-meta">
-            <span class="badge badge-info">Lesson 04</span>
-            <span class="badge badge-gray">Beginner</span>
+            <span class="badge badge-info">Group 4</span>
+            <span class="badge badge-gray">Switch Circuit</span>
           </div>
           <h4 class="task-brief-title">Switches &amp; Circuits</h4>
           <p class="task-brief-desc">
-            Build a simple circuit and observe how a switch controls the flow of electricity to the bulb.
+            Nicholas, Catherine, and Jack need to build a simple circuit where a switch controls an output.
           </p>
-          <div class="task-brief-section-title">Objectives</div>
+          <div class="task-brief-section-title">Build Goal</div>
           <ul class="task-brief-list">
-            <li>Place the battery, switch, and bulb on the canvas.</li>
-            <li>Wire the components into a closed loop.</li>
-            <li>Toggle the switch and run the simulation.</li>
-            <li>Note when the bulb turns on and explain why.</li>
+            <li>Use a battery, switch, and output component.</li>
+            <li>Connect the parts into one complete loop.</li>
+            <li>Test whether the output turns on only when the switch is closed.</li>
+            <li>Compare your version with another group design.</li>
           </ul>
         </div>
-        <div class="live-stats-compact">
-          <div class="stats-panel-title">Live Stats</div>
-          <div class="stat-block">
-            <div class="stat-label">Voltage Output</div>
-            <div><span class="stat-value" id="stat-voltage">9.0</span> <span class="stat-unit">V</span></div>
-          </div>
-          <div class="stat-block">
-            <div class="stat-label">Current</div>
-            <div><span class="stat-value" id="stat-current">0.00</span> <span class="stat-unit">A</span></div>
-            <div class="stat-status-row">
-              <span class="status-dot offline" id="stat-dot"></span>
-              <span id="stat-status">Open circuit</span>
-            </div>
-          </div>
-        </div>
-        <div class="ai-hint-box">
-          <div class="ai-hint-header">
-            ${svgIcon('star', 13, '#92400e')} Experimental assistant
-          </div>
-          <span id="ai-hint-text">Try toggling the switch to close the circuit. Observe the change in brightness of the bulb.</span>
+        <div class="task-reminder">
+          <div class="task-reminder-title">Before presenting</div>
+          <p>Make sure every wire returns to the battery and explain what changes when the switch opens or closes.</p>
         </div>
         <div class="canvas-bottom-bar" style="flex-direction:column;gap:6px;border:none;padding:0">
           <button class="btn btn-primary btn-full" id="run-btn" onclick="runSim()">
-            ▶ RUN SIMULATION
-          </button>
-          <button class="btn btn-outline btn-full" onclick="resetSimulation()">
-            Reset
+            START SIMULATION
           </button>
         </div>
       </div>
@@ -1857,7 +1837,7 @@ function runSim() {
     if (btn) btn.onclick = stopSimWrapper;
     showToast('Circuit complete. Current is flowing.', 'success');
   } else {
-    if (btn) { btn.textContent = '▶ RUN SIMULATION'; btn.onclick = runSim; }
+    setRunButtonIdle(btn);
     showToast(result.message || 'Circuit incomplete. Check the connections.', 'warning');
   }
   updateSimStats(CircuitSim.getStats());
@@ -1867,8 +1847,18 @@ function runSim() {
 function stopSimWrapper() {
   CircuitSim.stopSimulation();
   const btn = document.getElementById('run-btn');
-  if (btn) { btn.textContent = '▶ RUN SIMULATION'; btn.onclick = runSim; }
+  setRunButtonIdle(btn);
   updateSimStats(CircuitSim.getStats());
+}
+
+function idleRunButtonLabel() {
+  return state.page === 'simulation' ? 'START SIMULATION' : '▶ RUN SIMULATION';
+}
+
+function setRunButtonIdle(btn = document.getElementById('run-btn')) {
+  if (!btn) return;
+  btn.textContent = idleRunButtonLabel();
+  btn.onclick = runSim;
 }
 
 function updateSimStats(stats) {
@@ -1973,8 +1963,7 @@ function resetSimulation() {
   updateSimStats(CircuitSim.getStats());
   updateWireModeUI();
   updateSelectionUI();
-  const btn = document.getElementById('run-btn');
-  if (btn) { btn.textContent = '▶ RUN SIMULATION'; btn.onclick = runSim; }
+  setRunButtonIdle();
   saveActiveBranchSnapshot();
 }
 
@@ -1986,8 +1975,7 @@ function deleteSelectedComponent() {
     updateSelectionUI();
     return;
   }
-  const btn = document.getElementById('run-btn');
-  if (btn) { btn.textContent = '▶ RUN SIMULATION'; btn.onclick = runSim; }
+  setRunButtonIdle();
   updateSimStats(CircuitSim.getStats());
   updateWireModeUI();
   updateSelectionUI();
