@@ -967,6 +967,11 @@ function renderSimulation() {
                   title="Tap two terminals to connect them">
             ${svgIcon('zap',14)} Connect
           </button>
+          <button class="btn btn-ghost btn-sm delete-component-btn" id="delete-component-btn"
+                  onclick="deleteSelectedComponent()" disabled
+                  title="Select a component to delete it">
+            ${svgIcon('trash',14)} Delete
+          </button>
           <button class="btn btn-ghost btn-sm" onclick="resetSimulation()" title="Reset circuit">
             Reset
           </button>
@@ -1180,6 +1185,11 @@ function renderSimAdvanced() {
           <button class="btn btn-ghost btn-sm" id="wiring-mode-btn" onclick="toggleWiringMode()"
                   title="Tap two terminals to connect them">
             ${svgIcon('zap',14)} Connect
+          </button>
+          <button class="btn btn-ghost btn-sm delete-component-btn" id="delete-component-btn"
+                  onclick="deleteSelectedComponent()" disabled
+                  title="Select a component to delete it">
+            ${svgIcon('trash',14)} Delete
           </button>
           <button class="btn btn-ghost btn-sm" onclick="resetSimulation()">Reset</button>
           <span class="wire-mode-hint" id="wire-mode-hint">
@@ -1706,11 +1716,12 @@ function bindPage(page) {
       const svg = document.getElementById('circuit-svg');
       const container = document.getElementById('circuit-canvas-container');
       if (svg && container) {
-        CircuitSim.init('circuit-svg', 'circuit-canvas-container', updateSimStats);
+        CircuitSim.init('circuit-svg', 'circuit-canvas-container', updateSimStats, updateSelectionUI);
         if (page === 'simulation-advanced' && state.branchSnapshots[state.branchActive]) {
           CircuitSim.importState(state.branchSnapshots[state.branchActive]);
         }
         updateWireModeUI();
+        updateSelectionUI();
         updateSimStats(CircuitSim.getStats());
       }
     }, 50);
@@ -1805,6 +1816,7 @@ function addCompClick(type) {
     CircuitSim.addComponent(type);
     showToast(COMP_DEFS_LABELS[type] + ' added', 'success');
     updateSimStats(CircuitSim.getStats());
+    updateSelectionUI();
     saveActiveBranchSnapshot();
   }
 }
@@ -1816,6 +1828,7 @@ function addComponentFromLibrary(type, label) {
   closeModal();
   showToast(`${label} added to canvas`, 'success');
   updateSimStats(CircuitSim.getStats());
+  updateSelectionUI();
 }
 
 function setAddComponentCategory(category) {
@@ -1908,15 +1921,40 @@ function toggleWiringMode() {
 function updateWireModeUI() {
   const active = Boolean(window.CircuitSim?.isWiringMode?.());
   const btn = document.getElementById('wiring-mode-btn');
-  const hint = document.getElementById('wire-mode-hint');
   if (btn) {
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   }
-  if (hint) {
-    hint.textContent = active
-      ? 'Connect mode on: tap two terminals.'
-      : 'Tap Connect, then tap two terminals.';
+  updateCanvasToolHint();
+}
+
+function getComponentLabel(comp) {
+  if (!comp) return 'component';
+  return COMP_DEFS_LABELS[comp.type] || comp.type || 'component';
+}
+
+function updateSelectionUI(selected = window.CircuitSim?.getSelectedComponent?.() || null) {
+  const btn = document.getElementById('delete-component-btn');
+  const hasSelection = Boolean(selected);
+  if (btn) {
+    btn.disabled = !hasSelection;
+    btn.classList.toggle('delete-ready', hasSelection);
+    btn.title = hasSelection
+      ? `Delete selected ${getComponentLabel(selected)}`
+      : 'Select a component to delete it';
+  }
+  updateCanvasToolHint(selected);
+}
+
+function updateCanvasToolHint(selected = window.CircuitSim?.getSelectedComponent?.() || null) {
+  const hint = document.getElementById('wire-mode-hint');
+  if (!hint) return;
+  if (window.CircuitSim?.isWiringMode?.()) {
+    hint.textContent = 'Connect mode on: tap two terminals.';
+  } else if (selected) {
+    hint.textContent = `Selected: ${getComponentLabel(selected)}. Tap Delete or press Delete.`;
+  } else {
+    hint.textContent = 'Tap Connect, then tap two terminals.';
   }
 }
 
@@ -1934,9 +1972,27 @@ function resetSimulation() {
   CircuitSim.reset();
   updateSimStats(CircuitSim.getStats());
   updateWireModeUI();
+  updateSelectionUI();
   const btn = document.getElementById('run-btn');
   if (btn) { btn.textContent = '▶ RUN SIMULATION'; btn.onclick = runSim; }
   saveActiveBranchSnapshot();
+}
+
+function deleteSelectedComponent() {
+  if (!window.CircuitSim?.deleteSelectedComponent) return;
+  const deleted = CircuitSim.deleteSelectedComponent();
+  if (!deleted) {
+    showToast('Select a component first, then tap Delete.', 'info');
+    updateSelectionUI();
+    return;
+  }
+  const btn = document.getElementById('run-btn');
+  if (btn) { btn.textContent = '▶ RUN SIMULATION'; btn.onclick = runSim; }
+  updateSimStats(CircuitSim.getStats());
+  updateWireModeUI();
+  updateSelectionUI();
+  saveActiveBranchSnapshot();
+  showToast(`${getComponentLabel(deleted)} deleted. Connected wires were removed.`, 'info');
 }
 
 function preparePresentation() {
@@ -2119,4 +2175,13 @@ window.addEventListener('hashchange', () => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModal();
   if (e.key === 'Enter' && document.getElementById('chat-inp') === document.activeElement) sendChat();
+  if ((e.key === 'Delete' || e.key === 'Backspace') &&
+      (state.page === 'simulation' || state.page === 'simulation-advanced')) {
+    const target = e.target;
+    const isEditing = target?.matches?.('input, textarea, select, [contenteditable="true"]');
+    if (!isEditing && window.CircuitSim?.getSelectedComponent?.()) {
+      e.preventDefault();
+      deleteSelectedComponent();
+    }
+  }
 });
