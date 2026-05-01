@@ -173,7 +173,7 @@ function init(svgId, canvasId, onStatsChange, onSelectionChange) {
   simState.dragging = null;
   simState.selectedComponentId = null;
 
-  setupDefaultCircuit();
+  setupBlankCircuit();
   bindEvents();
   render();
   updateStats();
@@ -220,6 +220,12 @@ function setupDefaultCircuit() {
   simState.components = defaults.components;
   simState.wires = defaults.wires;
   simState.nextId = defaults.nextId;
+}
+
+function setupBlankCircuit() {
+  simState.components = [];
+  simState.wires = [];
+  simState.nextId = 1;
 }
 
 function addComponent(type) {
@@ -288,7 +294,7 @@ function reset() {
   simState.selectedComponentId = null;
   simState.lastRunAttempted = false;
   simState.lastResult = null;
-  setupDefaultCircuit();
+  setupBlankCircuit();
   render();
   updateStats();
   notifySelectionChange();
