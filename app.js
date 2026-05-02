@@ -1312,6 +1312,9 @@ function renderSimAdvanced() {
       <div class="canvas-area">
         <div class="canvas-toolbar">
           <span class="canvas-title">Project: Simple Switch Circuit — ${activeBranch.name}</span>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('add-component')" title="Add Component">
+            ${svgIcon('plus',14)} Add
+          </button>
           <button class="btn btn-ghost btn-sm" id="wiring-mode-btn" onclick="toggleWiringMode()"
                   title="Tap two terminals to connect them">
             ${svgIcon('zap',14)} Connect
