@@ -122,6 +122,7 @@ let simState = {
   nextId: 1,
   dragging: null,       // {compId, offsetX, offsetY}
   selectedComponentId: null,
+  selectedWireId: null,
   wiringFrom: null,     // {compId, terminal, x, y}
   wiringMode: false,
   mouseX: 0, mouseY: 0,
@@ -146,10 +147,15 @@ window.CircuitSim = {
   getStats,
   getCircuitResult,
   getSelectedComponent,
+  getSelectedWire,
   selectComponent,
+  selectWire,
   clearSelection,
   deleteComponent,
   deleteSelectedComponent,
+  deleteWire,
+  deleteSelectedWire,
+  clearWires,
   setWiringMode,
   isWiringMode,
   snapshotToSVG,
@@ -172,6 +178,7 @@ function init(svgId, canvasId, onStatsChange, onSelectionChange) {
   simState.wiringMode = false;
   simState.dragging = null;
   simState.selectedComponentId = null;
+  simState.selectedWireId = null;
 
   setupBlankCircuit();
   bindEvents();
@@ -278,6 +285,7 @@ function importState(snapshot) {
   simState.wiringMode = false;
   simState.dragging = null;
   simState.selectedComponentId = null;
+  simState.selectedWireId = null;
   simState.lastRunAttempted = false;
   simState.lastResult = snapshot.lastResult || null;
   render();
@@ -292,6 +300,7 @@ function reset() {
   simState.wiringMode = false;
   simState.dragging = null;
   simState.selectedComponentId = null;
+  simState.selectedWireId = null;
   simState.lastRunAttempted = false;
   simState.lastResult = null;
   setupBlankCircuit();
@@ -341,24 +350,47 @@ function getSelectedComponent() {
   return simState.components.find(c => c.id === simState.selectedComponentId) || null;
 }
 
+function getSelectedWire() {
+  return simState.wires.find(w => w.id === simState.selectedWireId) || null;
+}
+
 function selectComponent(compId) {
   const nextId = simState.components.some(c => c.id === compId) ? compId : null;
-  if (simState.selectedComponentId === nextId) return getSelectedComponent();
+  if (simState.selectedComponentId === nextId && !simState.selectedWireId) return getSelectedComponent();
   simState.selectedComponentId = nextId;
+  simState.selectedWireId = null;
   renderComponents();
+  renderWires();
   notifySelectionChange();
   return getSelectedComponent();
 }
 
-function clearSelection() {
-  if (!simState.selectedComponentId) return;
+function selectWire(wireId) {
+  const nextId = simState.wires.some(w => w.id === wireId) ? wireId : null;
+  if (simState.selectedWireId === nextId && !simState.selectedComponentId) return getSelectedWire();
+  simState.selectedWireId = nextId;
   simState.selectedComponentId = null;
+  renderWires();
   renderComponents();
+  notifySelectionChange();
+  return getSelectedWire();
+}
+
+function clearSelection() {
+  if (!simState.selectedComponentId && !simState.selectedWireId) return;
+  simState.selectedComponentId = null;
+  simState.selectedWireId = null;
+  renderComponents();
+  renderWires();
   notifySelectionChange();
 }
 
 function deleteSelectedComponent() {
   return deleteComponent(simState.selectedComponentId);
+}
+
+function deleteSelectedWire() {
+  return deleteWire(simState.selectedWireId);
 }
 
 function deleteComponent(compId) {
@@ -372,12 +404,49 @@ function deleteComponent(compId) {
   if (simState.wiringFrom?.compId === compId) simState.wiringFrom = null;
   simState.dragging = null;
   simState.selectedComponentId = null;
+  simState.selectedWireId = null;
   simState.lastRunAttempted = false;
   simState.lastResult = null;
   render();
   updateStats();
   notifySelectionChange();
   return { ...comp };
+}
+
+function deleteWire(wireId) {
+  if (!wireId) return null;
+  const wire = simState.wires.find(w => w.id === wireId);
+  if (!wire) return null;
+
+  if (simState.running) stopSimulation();
+  simState.wires = simState.wires.filter(w => w.id !== wireId);
+  if (simState.selectedWireId === wireId) simState.selectedWireId = null;
+  simState.wiringFrom = null;
+  simState.lastRunAttempted = false;
+  simState.lastResult = null;
+  render();
+  updateStats();
+  notifySelectionChange();
+  return {
+    id: wire.id,
+    from: { ...wire.from },
+    to: { ...wire.to },
+  };
+}
+
+function clearWires() {
+  if (!simState.wires.length) return 0;
+  const count = simState.wires.length;
+  if (simState.running) stopSimulation();
+  simState.wires = [];
+  simState.selectedWireId = null;
+  simState.wiringFrom = null;
+  simState.lastRunAttempted = false;
+  simState.lastResult = null;
+  render();
+  updateStats();
+  notifySelectionChange();
+  return count;
 }
 
 function setWiringMode(enabled) {
@@ -393,7 +462,7 @@ function isWiringMode() {
 
 function notifySelectionChange() {
   if (typeof simState.onSelectionChange === 'function') {
-    simState.onSelectionChange(getSelectedComponent());
+    simState.onSelectionChange(getSelectedComponent(), getSelectedWire());
   }
 }
 
@@ -724,12 +793,19 @@ function renderWires() {
     const classes = ['circuit-wire'];
     if (simState.running && activeWireIds.has(w.id)) classes.push('animated');
     if (simState.lastRunAttempted && !result.closed && warningWireIds.has(w.id)) classes.push('warn');
+    if (simState.selectedWireId === w.id) classes.push('selected');
     path.setAttribute('class', classes.join(' '));
     if (simState.running && activeWireIds.has(w.id)) {
       path.style.strokeDashoffset = -simState.animOffset;
     }
     path.dataset.wireId = w.id;
     wireGroup.appendChild(path);
+
+    const hitPath = mkSvg('path');
+    hitPath.setAttribute('d', orthoPath(fp, tp));
+    hitPath.setAttribute('class', 'circuit-wire-hit');
+    hitPath.dataset.wireId = w.id;
+    wireGroup.appendChild(hitPath);
   }
 }
 
@@ -953,6 +1029,7 @@ function onPointerDown(e) {
         simState.lastRunAttempted = false;
         render();
         updateStats();
+        notifySelectionChange();
       } else {
         simState.wiringFrom = null;
         render();
@@ -985,6 +1062,13 @@ function onPointerDown(e) {
         toggleOnClick: true,
       };
     }
+    return;
+  }
+
+  const wireHit = e.target.closest('[data-wire-id]');
+  if (wireHit) {
+    e.preventDefault();
+    selectWire(wireHit.dataset.wireId);
     return;
   }
 
@@ -1092,10 +1176,5 @@ function onDrop(e) {
 document.addEventListener('dblclick', (e) => {
   const wireEl = e.target.closest('[data-wire-id]');
   if (!wireEl) return;
-  const wireId = wireEl.dataset.wireId;
-  simState.wires = simState.wires.filter(w => w.id !== wireId);
-  if (simState.running) stopSimulation();
-  simState.lastRunAttempted = false;
-  render();
-  updateStats();
+  deleteWire(wireEl.dataset.wireId);
 });

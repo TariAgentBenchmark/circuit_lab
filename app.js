@@ -1122,6 +1122,16 @@ function renderSimulation() {
                   title="Select a component to delete it">
             ${svgIcon('trash',14)} Delete
           </button>
+          <button class="btn btn-ghost btn-sm delete-wire-btn" id="delete-wire-btn"
+                  onclick="deleteSelectedWire()" disabled
+                  title="Select a wire to delete it">
+            ${svgIcon('x',14)} Delete Wire
+          </button>
+          <button class="btn btn-ghost btn-sm clear-wires-btn" id="clear-wires-btn"
+                  onclick="clearCircuitWires()" disabled
+                  title="Remove all wire connections">
+            Reset Wires
+          </button>
           <button class="btn btn-ghost btn-sm" onclick="resetSimulation()" title="Reset circuit">
             Reset
           </button>
@@ -1323,6 +1333,16 @@ function renderSimAdvanced() {
                   onclick="deleteSelectedComponent()" disabled
                   title="Select a component to delete it">
             ${svgIcon('trash',14)} Delete
+          </button>
+          <button class="btn btn-ghost btn-sm delete-wire-btn" id="delete-wire-btn"
+                  onclick="deleteSelectedWire()" disabled
+                  title="Select a wire to delete it">
+            ${svgIcon('x',14)} Delete Wire
+          </button>
+          <button class="btn btn-ghost btn-sm clear-wires-btn" id="clear-wires-btn"
+                  onclick="clearCircuitWires()" disabled
+                  title="Remove all wire connections">
+            Reset Wires
           </button>
           <button class="btn btn-ghost btn-sm" onclick="resetSimulation()">Reset</button>
           <span class="wire-mode-hint" id="wire-mode-hint">
@@ -2125,7 +2145,10 @@ function getComponentLabel(comp) {
   return COMP_DEFS_LABELS[comp.type] || comp.type || 'component';
 }
 
-function updateSelectionUI(selected = window.CircuitSim?.getSelectedComponent?.() || null) {
+function updateSelectionUI(
+  selected = window.CircuitSim?.getSelectedComponent?.() || null,
+  selectedWire = window.CircuitSim?.getSelectedWire?.() || null
+) {
   const btn = document.getElementById('delete-component-btn');
   const hasSelection = Boolean(selected);
   if (btn) {
@@ -2135,18 +2158,40 @@ function updateSelectionUI(selected = window.CircuitSim?.getSelectedComponent?.(
       ? `Delete selected ${getComponentLabel(selected)}`
       : 'Select a component to delete it';
   }
-  updateCanvasToolHint(selected);
+  const wireBtn = document.getElementById('delete-wire-btn');
+  const hasWireSelection = Boolean(selectedWire);
+  if (wireBtn) {
+    wireBtn.disabled = !hasWireSelection;
+    wireBtn.classList.toggle('delete-ready', hasWireSelection);
+    wireBtn.title = hasWireSelection
+      ? 'Delete selected wire connection'
+      : 'Select a wire to delete it';
+  }
+  const clearWiresBtn = document.getElementById('clear-wires-btn');
+  const wireCount = window.CircuitSim?.exportState?.()?.wires?.length || 0;
+  if (clearWiresBtn) {
+    clearWiresBtn.disabled = wireCount === 0;
+    clearWiresBtn.title = wireCount
+      ? `Remove ${wireCount} wire connection${wireCount > 1 ? 's' : ''}`
+      : 'No wire connections to reset';
+  }
+  updateCanvasToolHint(selected, selectedWire);
 }
 
-function updateCanvasToolHint(selected = window.CircuitSim?.getSelectedComponent?.() || null) {
+function updateCanvasToolHint(
+  selected = window.CircuitSim?.getSelectedComponent?.() || null,
+  selectedWire = window.CircuitSim?.getSelectedWire?.() || null
+) {
   const hint = document.getElementById('wire-mode-hint');
   if (!hint) return;
   if (window.CircuitSim?.isWiringMode?.()) {
     hint.textContent = 'Connect mode on: tap two terminals.';
   } else if (selected) {
     hint.textContent = `Selected: ${getComponentLabel(selected)}. Tap Delete or press Delete.`;
+  } else if (selectedWire) {
+    hint.textContent = 'Selected: wire connection. Tap Delete Wire or press Delete.';
   } else {
-    hint.textContent = 'Tap Connect, then tap two terminals.';
+    hint.textContent = 'Tap a wire to select it, or tap Connect to add a new wire.';
   }
 }
 
@@ -2183,6 +2228,38 @@ function deleteSelectedComponent() {
   updateSelectionUI();
   saveActiveBranchSnapshot();
   showToast(`${getComponentLabel(deleted)} deleted. Connected wires were removed.`, 'info');
+}
+
+function deleteSelectedWire() {
+  if (!window.CircuitSim?.deleteSelectedWire) return;
+  const deleted = CircuitSim.deleteSelectedWire();
+  if (!deleted) {
+    showToast('Select a wire first, then tap Delete Wire.', 'info');
+    updateSelectionUI();
+    return;
+  }
+  setRunButtonIdle();
+  updateSimStats(CircuitSim.getStats());
+  updateWireModeUI();
+  updateSelectionUI();
+  saveActiveBranchSnapshot();
+  showToast('Wire connection deleted.', 'info');
+}
+
+function clearCircuitWires() {
+  if (!window.CircuitSim?.clearWires) return;
+  const removed = CircuitSim.clearWires();
+  if (!removed) {
+    showToast('There are no wire connections to reset.', 'info');
+    updateSelectionUI();
+    return;
+  }
+  setRunButtonIdle();
+  updateSimStats(CircuitSim.getStats());
+  updateWireModeUI();
+  updateSelectionUI();
+  saveActiveBranchSnapshot();
+  showToast(`${removed} wire connection${removed > 1 ? 's' : ''} reset. Components were kept.`, 'info');
 }
 
 function preparePresentation() {
@@ -2373,6 +2450,9 @@ document.addEventListener('keydown', e => {
     if (!isEditing && window.CircuitSim?.getSelectedComponent?.()) {
       e.preventDefault();
       deleteSelectedComponent();
+    } else if (!isEditing && window.CircuitSim?.getSelectedWire?.()) {
+      e.preventDefault();
+      deleteSelectedWire();
     }
   }
 });

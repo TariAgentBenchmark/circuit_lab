@@ -284,16 +284,20 @@ h4 { font-size: 1rem;    font-weight: 600; }
   color: white;
   border: 1.5px solid var(--danger);
 }
-.delete-component-btn[disabled] {
+.delete-component-btn[disabled],
+.delete-wire-btn[disabled],
+.clear-wires-btn[disabled] {
   opacity: .45;
   cursor: not-allowed;
 }
-.delete-component-btn.delete-ready {
+.delete-component-btn.delete-ready,
+.delete-wire-btn.delete-ready {
   color: var(--danger);
   border-color: #fecaca;
   background: #fef2f2;
 }
-.delete-component-btn.delete-ready:hover {
+.delete-component-btn.delete-ready:hover,
+.delete-wire-btn.delete-ready:hover {
   color: white;
   border-color: var(--danger);
   background: var(--danger);
@@ -2357,6 +2361,20 @@ h4 { font-size: 1rem;    font-weight: 600; }
   animation: flowCurrent 0.6s linear infinite;
 }
 .circuit-wire.warn { stroke: var(--danger); stroke-dasharray: 4 4; }
+.circuit-wire.selected {
+  stroke: var(--accent);
+  stroke-width: 4;
+  filter: drop-shadow(0 0 5px rgba(37, 99, 235, .35));
+}
+.circuit-wire-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 18;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  cursor: pointer;
+  pointer-events: stroke;
+}
 
 @keyframes flowCurrent {
   from { stroke-dashoffset: 0; }
