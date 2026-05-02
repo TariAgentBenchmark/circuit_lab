@@ -17,6 +17,7 @@ const state = {
   refSort: 'latest',
   addCompCategory: 'all',
   addCompSearch: '',
+  activeLab: 'lab1',
   chatMessages: [
     { from: 'Catherine', time: '4/18 12:55 PM', text: "I've added the battery. Can we test the switch next?" },
     { from: 'Jack', time: '4/18 01:00 PM', text: "I'm online now. Let's connect the bulb back to the battery." },
@@ -54,6 +55,7 @@ const ROUTE_PAGES = [
   'forgot',
   'about',
   'dashboard',
+  'lab',
   'lesson',
   'simulation',
   'simulation-advanced',
@@ -74,7 +76,7 @@ function pageFromHash() {
 function navTabForPage(page) {
   if (page === 'dashboard' || page === 'welcome') return 'home';
   if (page === 'reference' || page === 'lesson') return 'lessons';
-  if (page === 'simulation' || page === 'simulation-advanced' || page === 'presentation') return 'lab';
+  if (page === 'lab' || page === 'simulation' || page === 'simulation-advanced' || page === 'presentation') return 'lab';
   if (page === 'about') return 'about';
   return state.activeNavTab;
 }
@@ -113,6 +115,7 @@ function renderPage(page) {
     case 'forgot':               return renderForgot();
     case 'about':                return renderAbout();
     case 'dashboard':            return renderDashboard();
+    case 'lab':                  return renderLabHome();
     case 'lesson':               return renderLesson();
     case 'simulation':           return renderSimulation();
     case 'simulation-advanced':  return renderSimAdvanced();
@@ -135,8 +138,12 @@ function navHTML(active) {
         page:  'lesson',
       })).concat([{ label: 'View all lessons', page: 'reference' }])
     },
-    { id: 'lab',     label: 'Lab',     page: 'simulation', items: [
-      { label: 'Simulation Lab', page: 'simulation'          },
+    { id: 'lab',     label: 'Lab',     page: 'lab', items: [
+      { label: 'Lab Overview',   page: 'lab'                 },
+      { label: 'Lab 01 · Simple Switch Circuit', page: 'lab', activeLab: 'lab1' },
+      { label: 'Lab 02 · Buzzer Alert Circuit',  page: 'lab', activeLab: 'lab2' },
+      { label: 'Lab 03 · LED Signal Circuit',    page: 'lab', activeLab: 'lab3' },
+      { label: 'Task Brief',     page: 'simulation'          },
       { label: 'Advanced Mode',  page: 'simulation-advanced' },
       { label: 'Presentation',   page: 'presentation'        },
     ]},
@@ -146,7 +153,7 @@ function navHTML(active) {
   ];
   const itemHTML = (it) => `
     <a class="nav-dropdown-item"
-       onclick="navigate('${it.page}',{activeNavTab:'${navTabForPage(it.page)}'})"
+       onclick="navigate('${it.page}',{activeNavTab:'${navTabForPage(it.page)}'${it.activeLab ? `,activeLab:'${it.activeLab}'` : ''}})"
        href="javascript:void(0)">${it.label}</a>`;
   return `
   <header class="app-header">
@@ -648,7 +655,7 @@ function renderDashboard() {
           <h2>Welcome back, ${state.user.name}! 👋</h2>
           <p>Continue your learning journey in Electronics</p>
           <div class="welcome-actions">
-            <button class="welcome-btn-primary" onclick="navigate('simulation',{activeNavTab:'lab'})">
+            <button class="welcome-btn-primary" onclick="navigate('lab',{activeNavTab:'lab'})">
               ENTER SIMULATION LAB
             </button>
             <button class="welcome-btn-outline" onclick="navigate('lesson',{activeNavTab:'lessons'})">
@@ -828,6 +835,152 @@ function lessonSlide4SVG() {
   </div>`;
 }
 
+const LABS = [
+  {
+    id: 'lab1',
+    num: '01',
+    title: 'Simple Switch Circuit',
+    level: 'Beginner',
+    time: '15 min',
+    desc: 'Build one complete loop where a switch controls a light bulb.',
+    task: 'Create a circuit with a battery, switch, wires, and a light bulb. Run the simulation and explain why the bulb only turns on when the switch is closed.',
+    components: ['Battery', 'Switch', 'Light Bulb', 'Wires'],
+    hints: [
+      'Connect the battery positive terminal to the switch first.',
+      'The bulb must connect back to the battery negative terminal.',
+      'An open switch breaks the loop, so current cannot flow.',
+    ],
+    checkpoint: 'The bulb glows only after the switch is closed.',
+  },
+  {
+    id: 'lab2',
+    num: '02',
+    title: 'Buzzer Alert Circuit',
+    level: 'Beginner',
+    time: '18 min',
+    desc: 'Swap the bulb for a buzzer and compare light output with sound output.',
+    task: 'Design a switch-controlled buzzer circuit. Test whether the buzzer activates only when the circuit is complete.',
+    components: ['Battery', 'Switch', 'Buzzer', 'Wires'],
+    hints: [
+      'A buzzer is still a load, so it needs a closed path.',
+      'Use the same loop idea from Lab 01.',
+      'If the buzzer is disconnected from either side, it will not activate.',
+    ],
+    checkpoint: 'The buzzer activates only on a closed circuit.',
+  },
+  {
+    id: 'lab3',
+    num: '03',
+    title: 'LED Signal Circuit',
+    level: 'Challenge',
+    time: '20 min',
+    desc: 'Use an LED as the output and think about component placement.',
+    task: 'Build a switch-controlled LED circuit. Add a resistor if needed and compare the layout with other groups.',
+    components: ['Battery', 'Switch', 'LED', 'Resistor', 'Wires'],
+    hints: [
+      'The LED should be part of the closed path.',
+      'A resistor can be placed in series with the LED.',
+      'Check both terminals before running the simulation.',
+    ],
+    checkpoint: 'The LED turns on only when it is correctly connected in the loop.',
+  },
+];
+
+function getActiveLab() {
+  return LABS.find(lab => lab.id === state.activeLab) || LABS[0];
+}
+
+function listItemsHTML(items) {
+  return items.map(item => `<li>${escapeHTML(item)}</li>`).join('');
+}
+
+function componentChipsHTML(items) {
+  return items.map(item => `<span class="lab-component-chip">${escapeHTML(item)}</span>`).join('');
+}
+
+function renderLabHome() {
+  const activeLab = getActiveLab();
+  return `
+  <div class="page-wrapper lab-home-page">
+    ${navHTML('lab')}
+    <div class="lab-page-layout page-content">
+      <main class="lab-main">
+        <div class="lesson-header-block">
+          <div class="lesson-num">Lab Overview</div>
+          <h2>Electronics Lab Tasks</h2>
+          <p>Choose a lab, review the task, check the components, then start the advanced simulation.</p>
+        </div>
+
+        <div class="lab-list-grid">
+          ${LABS.map(lab => `
+            <button class="lab-card ${lab.id === activeLab.id ? 'active' : ''}"
+                    onclick="selectLab('${lab.id}')">
+              <div class="lab-card-index">Lab ${lab.num}</div>
+              <div class="lab-card-body">
+                <div class="lab-card-meta">
+                  <span class="badge ${lab.level === 'Challenge' ? 'badge-warning' : 'badge-info'}">${lab.level}</span>
+                  <span class="badge badge-gray">${lab.time}</span>
+                </div>
+                <h3>${escapeHTML(lab.title)}</h3>
+                <p>${escapeHTML(lab.desc)}</p>
+              </div>
+            </button>
+          `).join('')}
+        </div>
+
+        <section class="lab-task-panel">
+          <div class="lab-task-header">
+            <div>
+              <div class="lesson-num">Selected Task</div>
+              <h3>Lab ${activeLab.num}: ${escapeHTML(activeLab.title)}</h3>
+            </div>
+            <span class="badge badge-info">${activeLab.time}</span>
+          </div>
+
+          <div class="lab-task-grid">
+            <div class="lab-task-section lab-task-focus">
+              <div class="lab-task-section-title">Task Brief</div>
+              <p>${escapeHTML(activeLab.task)}</p>
+              <div class="lab-checkpoint">
+                <span>${svgIcon('check', 14, '#047857')}</span>
+                ${escapeHTML(activeLab.checkpoint)}
+              </div>
+            </div>
+
+            <div class="lab-task-section">
+              <div class="lab-task-section-title">Components</div>
+              <div class="lab-component-list">
+                ${componentChipsHTML(activeLab.components)}
+              </div>
+            </div>
+
+            <div class="lab-task-section">
+              <div class="lab-task-section-title">Helpful Hints</div>
+              <ul class="lab-hint-list">
+                ${listItemsHTML(activeLab.hints)}
+              </ul>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="dashboard-sidebar">
+        ${teamSidebarHTML()}
+      </aside>
+    </div>
+
+    <div class="lab-start-bar">
+      <div class="lab-start-summary">
+        <span>Ready for Lab ${activeLab.num}</span>
+        <strong>${escapeHTML(activeLab.title)}</strong>
+      </div>
+      <button class="btn btn-primary btn-xl" onclick="startSelectedLab()">
+        START SIMULATION
+      </button>
+    </div>
+  </div>`;
+}
+
 function renderLesson() {
   const slide = SLIDES[state.slideIndex] || SLIDES[0];
   return `
@@ -842,7 +995,7 @@ function renderLesson() {
       <nav class="main-nav">
         ${['home','lessons','lab','about'].map(t => `
           <a class="nav-link ${state.activeNavTab===t?'active':''}"
-             onclick="navigate('${t==='home'?'dashboard':t==='lessons'?'reference':t==='lab'?'simulation':t}',{activeNavTab:'${t}'})"
+             onclick="navigate('${t==='home'?'dashboard':t==='lessons'?'reference':t==='lab'?'lab':t}',{activeNavTab:'${t}'})"
              href="javascript:void(0)">${t.charAt(0).toUpperCase()+t.slice(1)}</a>
         `).join('')}
       </nav>
@@ -892,7 +1045,7 @@ function renderLesson() {
     </div>
 
     <div class="lesson-enter-lab">
-      <button class="btn btn-primary btn-xl" onclick="navigate('simulation',{activeNavTab:'lab'})">
+      <button class="btn btn-primary btn-xl" onclick="navigate('lab',{activeNavTab:'lab'})">
         ${svgIcon('flask', 18, 'white')} ENTER SIMULATION LAB
       </button>
     </div>
@@ -905,7 +1058,7 @@ function renderSimulation() {
   <div class="sim-page">
     <header class="sim-header">
       <div class="sim-header-left">
-        <button class="btn btn-ghost btn-sm" onclick="navigate('lesson',{activeNavTab:'lessons'})"
+        <button class="btn btn-ghost btn-sm" onclick="navigate('lab',{activeNavTab:'lab'})"
                 style="display:flex;align-items:center;gap:4px">
           ${svgIcon('back', 14)} back
         </button>
@@ -914,7 +1067,7 @@ function renderSimulation() {
       <nav class="sim-header-center">
         ${['home','lessons','lab','about'].map(t => `
           <a class="nav-link ${t==='lab'?'active':''}"
-             onclick="navigate('${t==='home'?'dashboard':t==='lessons'?'reference':t==='lab'?'simulation':t}',{activeNavTab:'${t}'})"
+             onclick="navigate('${t==='home'?'dashboard':t==='lessons'?'reference':t==='lab'?'lab':t}',{activeNavTab:'${t}'})"
              href="javascript:void(0)" style="font-size:.83rem;padding:5px 12px">${t.charAt(0).toUpperCase()+t.slice(1)}</a>
         `).join('')}
       </nav>
@@ -1112,7 +1265,7 @@ function renderSimAdvanced() {
       <nav class="sim-header-center">
         ${['home','lessons','lab','about'].map(t => `
           <a class="nav-link ${t==='lab'?'active':''}"
-             onclick="navigate('${t==='home'?'dashboard':t==='lessons'?'reference':t==='lab'?'simulation':t}',{activeNavTab:'${t}'})"
+             onclick="navigate('${t==='home'?'dashboard':t==='lessons'?'reference':t==='lab'?'lab':t}',{activeNavTab:'${t}'})"
              href="javascript:void(0)" style="font-size:.83rem;padding:5px 12px">${t.charAt(0).toUpperCase()+t.slice(1)}</a>
         `).join('')}
       </nav>
@@ -1751,6 +1904,19 @@ function bindPage(page) {
     const form = document.getElementById('login-form');
     if (form) form.addEventListener('submit', handleLogin);
   }
+}
+
+/* ── Lab overview ── */
+function selectLab(id) {
+  if (!LABS.some(lab => lab.id === id)) return;
+  state.activeLab = id;
+  navigate('lab', { activeNavTab: 'lab', activeLab: id });
+}
+
+function startSelectedLab() {
+  const lab = getActiveLab();
+  navigate('simulation-advanced', { activeNavTab: 'lab' });
+  showToast(`Starting Lab ${lab.num}: ${lab.title}`, 'info');
 }
 
 /* ── Auth handlers ── */
