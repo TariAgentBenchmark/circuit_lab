@@ -5,9 +5,18 @@
 ─────────────────────────────────────────────────────────────────────── */
 
 /* ══ State ══════════════════════════════════════════════════════════════ */
+const storedLoginState = (() => {
+  try {
+    return sessionStorage.getItem('circuitLabLoggedIn') === 'true';
+  } catch {
+    return false;
+  }
+})();
+
 const state = {
   page:    'welcome',
   user:    { name: 'Nicholas', role: 'Student', initial: 'N' },
+  isLoggedIn: storedLoginState,
   lessonProgress: { current: 4, percent: 70 },
   activeNavTab: 'home',
   slideIndex: 0,
@@ -64,6 +73,10 @@ const ROUTE_PAGES = [
 ];
 
 let suppressHashChange = false;
+
+function pageRequiresLogin(page) {
+  return !['welcome', 'login', 'forgot', 'about'].includes(page);
+}
 
 function normalizePage(page) {
   return ROUTE_PAGES.includes(page) ? page : 'welcome';
@@ -130,7 +143,6 @@ function navHTML(active) {
   const tabs = [
     { id: 'home',    label: 'Home',    page: 'dashboard', items: [
       { label: 'Dashboard',   page: 'dashboard' },
-      { label: 'Welcome',     page: 'welcome'   },
     ]},
     { id: 'lessons', label: 'Lessons', page: 'reference', items:
       REF_LESSONS.map(l => ({
@@ -199,6 +211,23 @@ function profileMenuHTML() {
   </div>`;
 }
 
+function publicHeaderHTML(active = '') {
+  return `
+  <header class="app-header">
+    <div class="header-logo">
+      <div class="logo-icon">${svgIcon('zap', 18, 'white')}</div>
+      Circuit Lab
+    </div>
+    <nav class="main-nav">
+      <a class="nav-link ${active === 'home' ? 'active' : ''}" onclick="goHome()" href="javascript:void(0)">Home</a>
+      <a class="nav-link ${active === 'about' ? 'active' : ''}" onclick="navigate('about',{activeNavTab:'about'})" href="javascript:void(0)">About</a>
+    </nav>
+    <div class="header-right">
+      <button class="btn btn-primary btn-sm" onclick="navigate('login')">Login</button>
+    </div>
+  </header>`;
+}
+
 function footerHTML() {
   return `
   <footer class="app-footer">
@@ -256,19 +285,19 @@ function teamSidebarHTML() {
     </div>
   </div>
   <div class="sidebar-section">
-    <div class="sidebar-section-title">Lesson Reference</div>
-    <div class="lesson-ref-card">
-      <div class="lesson-ref-header">Lesson 04 Notes</div>
-      <div class="lesson-ref-diagram">
-        <span class="lesson-ref-nav prev">◀</span>
+    <div class="sidebar-section-title">Lab Tasks</div>
+    <div class="lab-shortcut-card">
+      <div class="lab-shortcut-header">Simple Switch Circuit</div>
+      <div class="lab-shortcut-diagram">
         ${miniCircuitSVG()}
-        <span class="lesson-ref-nav next">▶</span>
       </div>
-      <div class="lesson-ref-note">
-        "A switch interrupts the flow of electrons to turn off the circuit."
+      <div class="lab-shortcut-body">
+        Review Lab 01, Lab 02, and Lab 03 task briefs before opening the advanced simulation.
       </div>
-      <div class="lesson-ref-footer">
-        <button class="btn btn-ghost btn-sm btn-full" onclick="navigate('reference')">View Full Notes →</button>
+      <div class="lab-shortcut-footer">
+        <button class="btn btn-ghost btn-sm btn-full" onclick="navigate('lab',{activeNavTab:'lab'})">
+          Go to Lab Overview →
+        </button>
       </div>
     </div>
   </div>`;
@@ -507,19 +536,7 @@ function renderForgot() {
 function renderAbout() {
   return `
   <div class="page-wrapper">
-    <header class="app-header">
-      <div class="header-logo">
-        <div class="logo-icon">${svgIcon('zap', 18, 'white')}</div>
-        Circuit Lab
-      </div>
-      <nav class="main-nav">
-        <a class="nav-link" onclick="navigate('welcome')" href="javascript:void(0)">Home</a>
-        <a class="nav-link active" href="javascript:void(0)">About</a>
-      </nav>
-      <div class="header-right">
-        <button class="btn btn-primary btn-sm" onclick="navigate('login')">Login</button>
-      </div>
-    </header>
+    ${state.isLoggedIn ? navHTML('about') : publicHeaderHTML('about')}
 
     <main class="page-content" style="background:var(--surface)">
       <div class="container py-12">
@@ -527,7 +544,7 @@ function renderAbout() {
           <h1>About Circuit Lab</h1>
           <p>Empowering learners through interactive electronics education.<br/>
           Circuit Lab is an online platform designed to help students learn electronics through hands-on simulations, interactive lessons, and collaborative projects.</p>
-          <button class="btn btn-primary btn-lg" onclick="navigate('login')">Try the circuit lab</button>
+          <button class="btn btn-primary btn-lg" onclick="tryCircuitLab()">Try the circuit lab</button>
           <div class="about-hero-image">
             ${heroCircuitSVG()}
           </div>
@@ -1877,8 +1894,28 @@ function closeProfileMenu() {
   document.querySelectorAll('.profile-menu.open').forEach(menu => menu.classList.remove('open'));
 }
 
+function setLoggedIn(value) {
+  state.isLoggedIn = value;
+  try {
+    if (value) {
+      sessionStorage.setItem('circuitLabLoggedIn', 'true');
+    } else {
+      sessionStorage.removeItem('circuitLabLoggedIn');
+    }
+  } catch {}
+}
+
+function goHome() {
+  navigate(state.isLoggedIn ? 'dashboard' : 'login', { activeNavTab: 'home' });
+}
+
+function tryCircuitLab() {
+  navigate(state.isLoggedIn ? 'dashboard' : 'login', { activeNavTab: 'home' });
+}
+
 function logout() {
   closeProfileMenu();
+  setLoggedIn(false);
   state.presentationSnapshot = null;
   navigate('login', { activeNavTab: 'home' });
 }
@@ -1889,11 +1926,13 @@ function handleLogin(e) {
   const pass  = document.getElementById('login-pass')?.value;
   if (!email || !pass) return;
   showToast('Signing in…');
+  setLoggedIn(true);
   setTimeout(() => navigate('dashboard', { activeNavTab: 'home' }), 800);
 }
 
 function handleGoogleLogin() {
   showToast('Signing in with Google…');
+  setLoggedIn(true);
   setTimeout(() => navigate('dashboard', { activeNavTab: 'home' }), 800);
 }
 
@@ -2367,6 +2406,7 @@ function showToast(msg, type = '') {
 /* ══ Boot ════════════════════════════════════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', () => {
   const initialPage = pageFromHash();
+  if (pageRequiresLogin(initialPage)) setLoggedIn(true);
   navigate(initialPage, { activeNavTab: navTabForPage(initialPage) }, { syncHash: !window.location.hash });
 });
 

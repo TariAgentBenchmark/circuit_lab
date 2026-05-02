@@ -1119,20 +1119,20 @@ h4 { font-size: 1rem;    font-weight: 600; }
   min-width: 0;
 }
 
-/* Lesson reference sidebar */
-.lesson-ref-card {
+/* Lab shortcut sidebar */
+.lab-shortcut-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
-.lesson-ref-header {
+.lab-shortcut-header {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
   font-size: .83rem;
   font-weight: 600;
 }
-.lesson-ref-diagram {
+.lab-shortcut-diagram {
   position: relative;
   padding: 14px;
   background: var(--bg);
@@ -1142,34 +1142,14 @@ h4 { font-size: 1rem;    font-weight: 600; }
   min-height: 120px;
   border-bottom: 1px solid var(--border);
 }
-.lesson-ref-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: .7rem;
-  transition: all var(--transition);
-}
-.lesson-ref-nav:hover { background: var(--primary); color: white; border-color: var(--primary); }
-.lesson-ref-nav.prev { left: 8px; }
-.lesson-ref-nav.next { right: 8px; }
-.lesson-ref-note {
+.lab-shortcut-body {
   padding: 12px 14px;
   font-size: .78rem;
   color: var(--text-secondary);
   line-height: 1.5;
   border-bottom: 1px solid var(--border);
-  font-style: italic;
 }
-.lesson-ref-footer {
+.lab-shortcut-footer {
   padding: 10px 14px;
 }
 
