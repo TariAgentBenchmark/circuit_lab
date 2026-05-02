@@ -179,10 +179,24 @@ function navHTML(active) {
       `).join('')}
     </nav>
     <div class="header-right">
-      <span class="user-badge">${state.user.name} (${state.user.role})</span>
-      <div class="avatar" title="Profile">${state.user.initial}</div>
+      ${profileMenuHTML()}
     </div>
   </header>`;
+}
+
+function profileMenuHTML() {
+  return `
+  <div class="profile-menu">
+    <button class="profile-trigger" onclick="toggleProfileMenu(event)" aria-label="Open profile menu">
+      <span class="user-badge">${state.user.name} (${state.user.role})</span>
+      <span class="avatar" title="Profile">${state.user.initial}</span>
+    </button>
+    <div class="profile-dropdown" role="menu">
+      <button class="profile-dropdown-item" onclick="logout()" role="menuitem">
+        ${svgIcon('logOut', 15)} Logout
+      </button>
+    </div>
+  </div>`;
 }
 
 function footerHTML() {
@@ -348,6 +362,7 @@ function svgIcon(name, size = 16, color = 'currentColor') {
     globe:   `<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>`,
     trash:   `<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>`,
     bolt:    `<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>`,
+    logOut:  `<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>`,
     settings:`<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>`,
   };
   const d = icons[name] || icons['zap'];
@@ -955,8 +970,7 @@ function renderLesson() {
         `).join('')}
       </nav>
       <div class="header-right">
-        <span class="user-badge">${state.user.name} (${state.user.role})</span>
-        <div class="avatar">${state.user.initial}</div>
+        ${profileMenuHTML()}
       </div>
     </header>
 
@@ -1802,6 +1816,9 @@ function bindGlobal() {
   document.getElementById('modal-overlay').addEventListener('click', e => {
     if (e.target.id === 'modal-overlay') closeModal();
   });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.profile-menu')) closeProfileMenu();
+  });
 }
 
 function bindPage(page) {
@@ -1848,6 +1865,24 @@ function startSelectedLab() {
 }
 
 /* ── Auth handlers ── */
+function toggleProfileMenu(event) {
+  event.stopPropagation();
+  const menu = event.currentTarget.closest('.profile-menu');
+  const isOpen = menu?.classList.contains('open');
+  closeProfileMenu();
+  if (!isOpen) menu?.classList.add('open');
+}
+
+function closeProfileMenu() {
+  document.querySelectorAll('.profile-menu.open').forEach(menu => menu.classList.remove('open'));
+}
+
+function logout() {
+  closeProfileMenu();
+  state.presentationSnapshot = null;
+  navigate('login', { activeNavTab: 'home' });
+}
+
 function handleLogin(e) {
   e.preventDefault();
   const email = document.getElementById('login-email')?.value;
