@@ -139,8 +139,8 @@ function renderPage(page) {
 }
 
 /* ══ Shared helpers ═════════════════════════════════════════════════════ */
-function navHTML(active) {
-  const tabs = [
+function navTabs() {
+  return [
     { id: 'home',    label: 'Home',    page: 'dashboard', items: [
       { label: 'Dashboard',   page: 'dashboard' },
     ]},
@@ -163,10 +163,35 @@ function navHTML(active) {
       { label: 'About Circuit Lab', page: 'about' },
     ]},
   ];
+}
+
+function navItemsHTML(active, linkStyle = '') {
   const itemHTML = (it) => `
     <a class="nav-dropdown-item"
        onclick="navigate('${it.page}',{activeNavTab:'${navTabForPage(it.page)}'${it.activeLab ? `,activeLab:'${it.activeLab}'` : ''}})"
        href="javascript:void(0)">${it.label}</a>`;
+  const styleAttr = linkStyle ? ` style="${linkStyle}"` : '';
+  return navTabs().map(t => `
+    <div class="nav-item">
+      <a class="nav-link ${active === t.id ? 'active' : ''}"
+         onclick="navigate('${t.page}',{activeNavTab:'${t.id}'})"
+         href="javascript:void(0)"${styleAttr}>
+        ${t.label}
+        <span class="nav-caret"
+              role="button"
+              tabindex="0"
+              aria-label="Open ${t.label} menu"
+              onclick="toggleNavDropdown(event)"
+              onkeydown="handleNavCaretKey(event)">▾</span>
+      </a>
+      <div class="nav-dropdown">
+        ${t.items.map(itemHTML).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function navHTML(active) {
   return `
   <header class="app-header">
     <div class="header-logo">
@@ -176,19 +201,7 @@ function navHTML(active) {
       Circuit Lab
     </div>
     <nav class="main-nav">
-      ${tabs.map(t => `
-        <div class="nav-item">
-          <a class="nav-link ${active === t.id ? 'active' : ''}"
-             onclick="navigate('${t.page}',{activeNavTab:'${t.id}'})"
-             href="javascript:void(0)">
-            ${t.label}
-            <span class="nav-caret">▾</span>
-          </a>
-          <div class="nav-dropdown">
-            ${t.items.map(itemHTML).join('')}
-          </div>
-        </div>
-      `).join('')}
+      ${navItemsHTML(active)}
     </nav>
     <div class="header-right">
       ${profileMenuHTML()}
@@ -980,11 +993,7 @@ function renderLesson() {
         </a>
       </div>
       <nav class="main-nav">
-        ${['home','lessons','lab','about'].map(t => `
-          <a class="nav-link ${state.activeNavTab===t?'active':''}"
-             onclick="navigate('${t==='home'?'dashboard':t==='lessons'?'reference':t==='lab'?'lab':t}',{activeNavTab:'${t}'})"
-             href="javascript:void(0)">${t.charAt(0).toUpperCase()+t.slice(1)}</a>
-        `).join('')}
+        ${navItemsHTML(state.activeNavTab)}
       </nav>
       <div class="header-right">
         ${profileMenuHTML()}
@@ -1209,11 +1218,7 @@ function renderSimAdvanced() {
         <span style="font-size:.83rem;color:var(--text-secondary)">Project: Simple Switch Circuit / Group 4</span>
       </div>
       <nav class="sim-header-center">
-        ${['home','lessons','lab','about'].map(t => `
-          <a class="nav-link ${t==='lab'?'active':''}"
-             onclick="navigate('${t==='home'?'dashboard':t==='lessons'?'reference':t==='lab'?'lab':t}',{activeNavTab:'${t}'})"
-             href="javascript:void(0)" style="font-size:.83rem;padding:5px 12px">${t.charAt(0).toUpperCase()+t.slice(1)}</a>
-        `).join('')}
+        ${navItemsHTML('lab', 'font-size:.83rem;padding:5px 12px')}
       </nav>
       <div class="sim-header-right">
         <button class="btn btn-primary btn-sm" onclick="preparePresentation()">
@@ -1834,6 +1839,7 @@ function bindGlobal() {
     if (e.target.id === 'modal-overlay') closeModal();
   });
   document.addEventListener('click', e => {
+    if (!e.target.closest('.nav-item')) closeNavDropdowns();
     if (!e.target.closest('.profile-menu')) closeProfileMenu();
   });
 }
@@ -1882,6 +1888,26 @@ function startSelectedLab() {
 }
 
 /* ── Auth handlers ── */
+function toggleNavDropdown(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const item = event.currentTarget.closest('.nav-item');
+  const isOpen = item?.classList.contains('open');
+  closeNavDropdowns();
+  closeProfileMenu();
+  if (!isOpen) item?.classList.add('open');
+}
+
+function handleNavCaretKey(event) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    toggleNavDropdown(event);
+  }
+}
+
+function closeNavDropdowns() {
+  document.querySelectorAll('.nav-item.open').forEach(item => item.classList.remove('open'));
+}
+
 function toggleProfileMenu(event) {
   event.stopPropagation();
   const menu = event.currentTarget.closest('.profile-menu');
@@ -2421,7 +2447,11 @@ window.addEventListener('hashchange', () => {
 
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Escape') {
+    closeModal();
+    closeNavDropdowns();
+    closeProfileMenu();
+  }
   if (e.key === 'Enter' && document.getElementById('chat-inp') === document.activeElement) sendChat();
   if ((e.key === 'Delete' || e.key === 'Backspace') &&
       (state.page === 'simulation' || state.page === 'simulation-advanced')) {
