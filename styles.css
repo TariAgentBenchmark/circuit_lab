@@ -1227,12 +1227,62 @@ h4 { font-size: 1rem;    font-weight: 600; }
   grid-template-columns: 1fr 280px;
   flex: 1;
 }
+.lab-task-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.lab-task-page-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  flex: 1;
+}
 .lab-main {
   padding: 28px 28px 112px 32px;
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+.lab-task-main {
+  padding: 26px 28px 112px 32px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.lab-back-link {
+  align-self: flex-start;
+}
+.lab-task-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.lab-task-hero h2 {
+  margin: 4px 0 8px;
+  font-size: 1.7rem;
+  line-height: 1.2;
+}
+.lab-task-hero p {
+  margin: 0;
+  max-width: 680px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  font-size: .94rem;
+}
+.lab-task-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 .lab-list-grid {
   display: grid;
@@ -1298,6 +1348,9 @@ h4 { font-size: 1rem;    font-weight: 600; }
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
+}
+.lab-task-panel.standalone {
+  box-shadow: var(--shadow-sm);
 }
 .lab-task-header {
   padding: 18px 20px;
@@ -2527,14 +2580,23 @@ h4 { font-size: 1rem;    font-weight: 600; }
   .dashboard-main,
   .lesson-main,
   .lab-main,
+  .lab-task-main,
   .reference-main {
     padding: 22px 18px 88px;
     border-right: none;
   }
   .lesson-page-layout,
   .lab-page-layout,
+  .lab-task-page-layout,
   .reference-layout {
     grid-template-columns: 1fr;
+  }
+  .lab-task-hero {
+    flex-direction: column;
+    padding: 20px;
+  }
+  .lab-task-badges {
+    justify-content: flex-start;
   }
   .lab-list-grid,
   .lab-task-grid {

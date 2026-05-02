@@ -140,10 +140,10 @@ function navHTML(active) {
     },
     { id: 'lab',     label: 'Lab',     page: 'lab', items: [
       { label: 'Lab Overview',   page: 'lab'                 },
-      { label: 'Lab 01 · Simple Switch Circuit', page: 'lab', activeLab: 'lab1' },
-      { label: 'Lab 02 · Buzzer Alert Circuit',  page: 'lab', activeLab: 'lab2' },
-      { label: 'Lab 03 · LED Signal Circuit',    page: 'lab', activeLab: 'lab3' },
-      { label: 'Task Brief',     page: 'simulation'          },
+      { label: 'Lab 01 · Simple Switch Circuit', page: 'simulation', activeLab: 'lab1' },
+      { label: 'Lab 02 · Buzzer Alert Circuit',  page: 'simulation', activeLab: 'lab2' },
+      { label: 'Lab 03 · LED Signal Circuit',    page: 'simulation', activeLab: 'lab3' },
+      { label: 'Selected Lab Task', page: 'simulation'       },
       { label: 'Advanced Mode',  page: 'simulation-advanced' },
       { label: 'Presentation',   page: 'presentation'        },
     ]},
@@ -899,7 +899,6 @@ function componentChipsHTML(items) {
 }
 
 function renderLabHome() {
-  const activeLab = getActiveLab();
   return `
   <div class="page-wrapper lab-home-page">
     ${navHTML('lab')}
@@ -908,12 +907,12 @@ function renderLabHome() {
         <div class="lesson-header-block">
           <div class="lesson-num">Lab Overview</div>
           <h2>Electronics Lab Tasks</h2>
-          <p>Choose a lab, review the task, check the components, then start the advanced simulation.</p>
+          <p>Choose a lab to review the task, components, and hints before opening the advanced simulation.</p>
         </div>
 
         <div class="lab-list-grid">
           ${LABS.map(lab => `
-            <button class="lab-card ${lab.id === activeLab.id ? 'active' : ''}"
+            <button class="lab-card"
                     onclick="selectLab('${lab.id}')">
               <div class="lab-card-index">Lab ${lab.num}</div>
               <div class="lab-card-body">
@@ -927,41 +926,6 @@ function renderLabHome() {
             </button>
           `).join('')}
         </div>
-
-        <section class="lab-task-panel">
-          <div class="lab-task-header">
-            <div>
-              <div class="lesson-num">Selected Task</div>
-              <h3>Lab ${activeLab.num}: ${escapeHTML(activeLab.title)}</h3>
-            </div>
-            <span class="badge badge-info">${activeLab.time}</span>
-          </div>
-
-          <div class="lab-task-grid">
-            <div class="lab-task-section lab-task-focus">
-              <div class="lab-task-section-title">Task Brief</div>
-              <p>${escapeHTML(activeLab.task)}</p>
-              <div class="lab-checkpoint">
-                <span>${svgIcon('check', 14, '#047857')}</span>
-                ${escapeHTML(activeLab.checkpoint)}
-              </div>
-            </div>
-
-            <div class="lab-task-section">
-              <div class="lab-task-section-title">Components</div>
-              <div class="lab-component-list">
-                ${componentChipsHTML(activeLab.components)}
-              </div>
-            </div>
-
-            <div class="lab-task-section">
-              <div class="lab-task-section-title">Helpful Hints</div>
-              <ul class="lab-hint-list">
-                ${listItemsHTML(activeLab.hints)}
-              </ul>
-            </div>
-          </div>
-        </section>
       </main>
 
       <aside class="dashboard-sidebar">
@@ -969,15 +933,6 @@ function renderLabHome() {
       </aside>
     </div>
 
-    <div class="lab-start-bar">
-      <div class="lab-start-summary">
-        <span>Ready for Lab ${activeLab.num}</span>
-        <strong>${escapeHTML(activeLab.title)}</strong>
-      </div>
-      <button class="btn btn-primary btn-xl" onclick="startSelectedLab()">
-        START SIMULATION
-      </button>
-    </div>
   </div>`;
 }
 
@@ -1054,129 +1009,79 @@ function renderLesson() {
 
 /* ── Simulation Lab ── */
 function renderSimulation() {
+  const activeLab = getActiveLab();
   return `
-  <div class="sim-page">
-    <header class="sim-header">
-      <div class="sim-header-left">
-        <button class="btn btn-ghost btn-sm" onclick="navigate('lab',{activeNavTab:'lab'})"
-                style="display:flex;align-items:center;gap:4px">
-          ${svgIcon('back', 14)} back
+  <div class="page-wrapper lab-task-page">
+    ${navHTML('lab')}
+    <div class="lab-task-page-layout page-content">
+      <main class="lab-task-main">
+        <button class="btn btn-ghost btn-sm lab-back-link" onclick="navigate('lab',{activeNavTab:'lab'})">
+          ${svgIcon('back', 14)} Back to Lab Overview
         </button>
-        <div class="sim-project-title">Project: <span>Simple Switch Circuit</span></div>
-      </div>
-      <nav class="sim-header-center">
-        ${['home','lessons','lab','about'].map(t => `
-          <a class="nav-link ${t==='lab'?'active':''}"
-             onclick="navigate('${t==='home'?'dashboard':t==='lessons'?'reference':t==='lab'?'lab':t}',{activeNavTab:'${t}'})"
-             href="javascript:void(0)" style="font-size:.83rem;padding:5px 12px">${t.charAt(0).toUpperCase()+t.slice(1)}</a>
-        `).join('')}
-      </nav>
-      <div class="sim-header-right">
-        <button class="btn btn-outline btn-sm" onclick="navigate('simulation-advanced')">
-          Advanced Mode →
-        </button>
-        <div class="avatar-group">
-          <div class="avatar" title="Nicholas" style="background:#2563eb">N</div>
-          <div class="avatar" title="Catherine" style="background:#7c3aed">C</div>
-          <div class="avatar" title="Jack" style="background:#d97706">J</div>
-        </div>
-      </div>
-    </header>
 
-    <div class="sim-body">
-      <!-- Component sidebar -->
-      <div class="component-panel">
-        <div class="comp-panel-title">Components</div>
-        ${[
-          {type:'battery',  icon: batteryIcon()},
-          {type:'switch',   icon: switchIcon()},
-          {type:'bulb',     icon: bulbIcon()},
-          {type:'buzzer',   icon: buzzerIcon()},
-          {type:'resistor', icon: resistorIcon()},
-          {type:'led',      icon: ledIcon()},
-        ].map(c => `
-          <div class="comp-item"
-               draggable="true"
-               ondragstart="dragComp(event,'${c.type}')"
-               onclick="addCompClick('${c.type}')"
-               title="Tap to add, then drag on the canvas">
-            ${c.icon}
-            <span class="comp-item-label">${COMP_DEFS_LABELS[c.type]||c.type}</span>
+        <section class="lab-task-hero">
+          <div>
+            <div class="lesson-num">Lab ${activeLab.num}</div>
+            <h2>${escapeHTML(activeLab.title)}</h2>
+            <p>${escapeHTML(activeLab.desc)}</p>
           </div>
-        `).join('')}
-      </div>
+          <div class="lab-task-badges">
+            <span class="badge ${activeLab.level === 'Challenge' ? 'badge-warning' : 'badge-info'}">${activeLab.level}</span>
+            <span class="badge badge-gray">${activeLab.time}</span>
+            <span class="badge badge-success">Group 4</span>
+          </div>
+        </section>
 
-      <!-- Canvas -->
-      <div class="canvas-area">
-        <div class="canvas-toolbar">
-          <span class="canvas-title">Circuit Canvas</span>
-          <button class="btn btn-ghost btn-sm" onclick="openModal('add-component')" title="Add Component">
-            ${svgIcon('plus',14)} Add
-          </button>
-          <button class="btn btn-ghost btn-sm" id="wiring-mode-btn" onclick="toggleWiringMode()"
-                  title="Tap two terminals to connect them">
-            ${svgIcon('zap',14)} Connect
-          </button>
-          <button class="btn btn-ghost btn-sm delete-component-btn" id="delete-component-btn"
-                  onclick="deleteSelectedComponent()" disabled
-                  title="Select a component to delete it">
-            ${svgIcon('trash',14)} Delete
-          </button>
-          <button class="btn btn-ghost btn-sm delete-wire-btn" id="delete-wire-btn"
-                  onclick="deleteSelectedWire()" disabled
-                  title="Select a wire to delete it">
-            ${svgIcon('x',14)} Delete Wire
-          </button>
-          <button class="btn btn-ghost btn-sm clear-wires-btn" id="clear-wires-btn"
-                  onclick="clearCircuitWires()" disabled
-                  title="Remove all wire connections">
-            Reset Wires
-          </button>
-          <button class="btn btn-ghost btn-sm" onclick="resetSimulation()" title="Reset circuit">
-            Reset
-          </button>
-          <span class="wire-mode-hint" id="wire-mode-hint">
-            Tap Connect, then tap two terminals.
-          </span>
-        </div>
-        <div id="circuit-canvas-container">
-          <div id="canvas-feedback" class="canvas-feedback neutral">
-            Build a loop with the battery, switch, and output. Press Run to test it.
+        <section class="lab-task-panel standalone">
+          <div class="lab-task-header">
+            <div>
+              <div class="lesson-num">Task Page</div>
+              <h3>What Nicholas, Catherine, and Jack need to build</h3>
+            </div>
           </div>
-          <svg id="circuit-svg" xmlns="http://www.w3.org/2000/svg"></svg>
-        </div>
-      </div>
 
-      <!-- Task panel -->
-      <div class="stats-panel task-intro-panel">
-        <div class="stats-panel-title">Task Brief</div>
-        <div class="task-brief">
-          <div class="task-brief-meta">
-            <span class="badge badge-info">Group 4</span>
-            <span class="badge badge-gray">Switch Circuit</span>
+          <div class="lab-task-grid">
+            <div class="lab-task-section lab-task-focus">
+              <div class="lab-task-section-title">Task Brief</div>
+              <p>${escapeHTML(activeLab.task)}</p>
+              <div class="lab-checkpoint">
+                <span>${svgIcon('check', 14, '#047857')}</span>
+                ${escapeHTML(activeLab.checkpoint)}
+              </div>
+            </div>
+
+            <div class="lab-task-section">
+              <div class="lab-task-section-title">Components</div>
+              <div class="lab-component-list">
+                ${componentChipsHTML(activeLab.components)}
+              </div>
+            </div>
+
+            <div class="lab-task-section">
+              <div class="lab-task-section-title">Helpful Hints</div>
+              <ul class="lab-hint-list">
+                ${listItemsHTML(activeLab.hints)}
+              </ul>
+            </div>
           </div>
-          <h4 class="task-brief-title">Switches &amp; Circuits</h4>
-          <p class="task-brief-desc">
-            Nicholas, Catherine, and Jack need to build a simple circuit where a switch controls an output.
-          </p>
-          <div class="task-brief-section-title">Build Goal</div>
-          <ul class="task-brief-list">
-            <li>Use a battery, switch, and output component.</li>
-            <li>Connect the parts into one complete loop.</li>
-            <li>Test whether the output turns on only when the switch is closed.</li>
-            <li>Compare your version with another group design.</li>
-          </ul>
-        </div>
-        <div class="task-reminder">
-          <div class="task-reminder-title">Before presenting</div>
-          <p>Make sure every wire returns to the battery and explain what changes when the switch opens or closes.</p>
-        </div>
-        <div class="canvas-bottom-bar" style="flex-direction:column;gap:6px;border:none;padding:0">
-          <button class="btn btn-primary btn-full" id="run-btn" onclick="runSim()">
-            START SIMULATION
-          </button>
-        </div>
+        </section>
+
+        ${chatHTML('lab-task-chat')}
+      </main>
+
+      <aside class="dashboard-sidebar">
+        ${teamSidebarHTML()}
+      </aside>
+    </div>
+
+    <div class="lab-start-bar">
+      <div class="lab-start-summary">
+        <span>Ready for Lab ${activeLab.num}</span>
+        <strong>${escapeHTML(activeLab.title)}</strong>
       </div>
+      <button class="btn btn-primary btn-xl" onclick="startSelectedLab()">
+        START SIMULATION
+      </button>
     </div>
   </div>`;
 }
@@ -1933,7 +1838,7 @@ function bindPage(page) {
 function selectLab(id) {
   if (!LABS.some(lab => lab.id === id)) return;
   state.activeLab = id;
-  navigate('lab', { activeNavTab: 'lab', activeLab: id });
+  navigate('simulation', { activeNavTab: 'lab', activeLab: id });
 }
 
 function startSelectedLab() {
