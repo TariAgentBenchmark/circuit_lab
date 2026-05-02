@@ -43,7 +43,7 @@ const state = {
   teamMembers: [
     { name: 'Nicholas',  role: 'Me', status: 'online',  initial: 'N', badge: null,     self: true  },
     { name: 'Catherine', role: '',   status: 'online',  initial: 'C', badge: null,     self: false },
-    { name: 'Jack',      role: '',   status: 'online',  initial: 'J', badge: 'remote', self: false },
+    { name: 'Jack',      role: '',   status: 'online',  initial: 'J', badge: null,     self: false },
   ],
 };
 
@@ -210,7 +210,7 @@ function teamSidebarHTML() {
     <div class="sidebar-section-title">Team Status</div>
     <div class="team-status-card">
       <div class="team-status-header">
-        Project Group 4
+        Project Group
         <span class="badge badge-info">${members.length}</span>
       </div>
       <div class="team-member-list">
@@ -225,15 +225,12 @@ function teamSidebarHTML() {
               <div class="team-member-role">${m.status === 'online' ? 'Online' : 'Offline'}</div>
             </div>
             ${m.badge ? `<span class="team-member-badge">${m.badge}</span>` : ''}
-            ${m.self ? '' : `
-              <button class="team-member-remove" title="Remove ${escapeHTML(m.name)}"
-                      onclick="removeTeamMember(${i})">×</button>
-            `}
           </div>
         `).join('')}
       </div>
-      <div class="team-invite-row">
+      <div class="team-actions-row">
         <button class="btn btn-outline btn-sm btn-full" onclick="openModal('invite')">+ Invite</button>
+        <button class="btn btn-outline btn-sm btn-full team-remove-action" onclick="openModal('remove-member')">Remove</button>
       </div>
     </div>
   </div>
@@ -1604,13 +1601,14 @@ function openModal(type) {
   overlay.classList.remove('hidden');
 
   if (type === 'invite') {
+    box.className = 'modal-box';
     box.innerHTML = `
     <div class="modal-header">
-      <h3>Change Team Member</h3>
+      <h3>Invite Member</h3>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body">
-      <p class="text-secondary text-sm">Invite a classmate to join Project Group 4.</p>
+      <p class="text-secondary text-sm">Invite a classmate to join Project Group.</p>
       <div class="form-group">
         <label class="form-label">Email Address</label>
         <div class="input-wrapper">
@@ -1632,7 +1630,42 @@ function openModal(type) {
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="sendInvite()">Change</button>
+      <button class="btn btn-primary" onclick="sendInvite()">Invite</button>
+    </div>`;
+  }
+
+  if (type === 'remove-member') {
+    box.className = 'modal-box';
+    const removableMembers = state.teamMembers
+      .map((member, index) => ({ member, index }))
+      .filter(item => !item.member.self);
+    box.innerHTML = `
+    <div class="modal-header">
+      <h3>Remove Member</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-secondary text-sm">Choose a classmate to remove from Project Group.</p>
+      <div class="member-remove-list">
+        ${removableMembers.length ? removableMembers.map(({ member, index }) => `
+          <div class="member-remove-option">
+            <div class="team-member-avatar">
+              ${member.initial}
+              <span class="status-dot ${member.status}"></span>
+            </div>
+            <div class="member-remove-meta">
+              <div class="team-member-name">${escapeHTML(member.name)}</div>
+              <div class="team-member-role">${member.status === 'online' ? 'Online' : 'Offline'}</div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="removeTeamMember(${index})">Remove</button>
+          </div>
+        `).join('') : `
+          <div class="empty-state compact">No classmates to remove</div>
+        `}
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Done</button>
     </div>`;
   }
 
@@ -2047,8 +2080,9 @@ function sendInvite() {
 function removeTeamMember(idx) {
   const m = state.teamMembers[idx];
   if (!m || m.self) return;
-  if (!confirm(`Remove ${m.name} from Project Group 4?`)) return;
+  if (!confirm(`Remove ${m.name} from Project Group?`)) return;
   state.teamMembers.splice(idx, 1);
+  closeModal();
   navigate(state.page);
   showToast(`${m.name} removed from the group`, 'info');
 }

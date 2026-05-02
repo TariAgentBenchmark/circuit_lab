@@ -1023,9 +1023,37 @@ h4 { font-size: 1rem;    font-weight: 600; }
   color: #92400e;
 }
 
-.team-invite-row {
+.team-actions-row {
   padding: 10px 14px;
   border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.team-remove-action {
+  color: var(--danger);
+}
+.team-remove-action:hover {
+  border-color: var(--danger);
+  background: #fef2f2;
+}
+.member-remove-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.member-remove-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.member-remove-meta {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Lesson reference sidebar */
