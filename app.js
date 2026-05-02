@@ -267,35 +267,10 @@ function escapeAttr(value) {
 }
 
 function teamSidebarHTML() {
-  const members = state.teamMembers;
   return `
   <div class="sidebar-section">
     <div class="sidebar-section-title">Team Status</div>
-    <div class="team-status-card">
-      <div class="team-status-header">
-        Project Group
-        <span class="badge badge-info">${members.length}</span>
-      </div>
-      <div class="team-member-list">
-        ${members.map((m, i) => `
-          <div class="team-member">
-            <div class="team-member-avatar">
-              ${m.initial}
-              <span class="status-dot ${m.status}"></span>
-            </div>
-            <div class="team-member-info">
-              <div class="team-member-name">${m.name}${m.role ? ` <span style="color:var(--text-muted);font-weight:400">(${m.role})</span>` : ''}</div>
-              <div class="team-member-role">${m.status === 'online' ? 'Online' : 'Offline'}</div>
-            </div>
-            ${m.badge ? `<span class="team-member-badge">${m.badge}</span>` : ''}
-          </div>
-        `).join('')}
-      </div>
-      <div class="team-actions-row">
-        <button class="btn btn-outline btn-sm btn-full" onclick="openModal('invite')">+ Invite</button>
-        <button class="btn btn-outline btn-sm btn-full team-remove-action" onclick="openModal('remove-member')">Remove</button>
-      </div>
-    </div>
+    ${teamStatusCardHTML()}
   </div>
   <div class="sidebar-section">
     <div class="sidebar-section-title">Lab Tasks</div>
@@ -312,6 +287,52 @@ function teamSidebarHTML() {
           Go to Lab Overview →
         </button>
       </div>
+    </div>
+  </div>`;
+}
+
+function teamStatusCardHTML(extraClass = '') {
+  const members = state.teamMembers;
+  return `
+  <div class="team-status-card ${extraClass}">
+    <div class="team-status-header">
+      Project Group
+      <span class="badge badge-info">${members.length}</span>
+    </div>
+    <div class="team-member-list">
+      ${members.map(m => `
+        <div class="team-member">
+          <div class="team-member-avatar">
+            ${m.initial}
+            <span class="status-dot ${m.status}"></span>
+          </div>
+          <div class="team-member-info">
+            <div class="team-member-name">${m.name}${m.role ? ` <span style="color:var(--text-muted);font-weight:400">(${m.role})</span>` : ''}</div>
+            <div class="team-member-role">${m.status === 'online' ? 'Online' : 'Offline'}</div>
+          </div>
+          ${m.badge ? `<span class="team-member-badge">${m.badge}</span>` : ''}
+        </div>
+      `).join('')}
+    </div>
+    <div class="team-actions-row">
+      <button class="btn btn-outline btn-sm btn-full" onclick="openModal('invite')">+ Invite</button>
+      <button class="btn btn-outline btn-sm btn-full team-remove-action" onclick="openModal('remove-member')">Remove</button>
+    </div>
+  </div>`;
+}
+
+function teamAvatarMenuHTML() {
+  return `
+  <div class="team-avatar-menu">
+    <button class="avatar-group-trigger" onclick="toggleTeamMenu(event)" aria-label="Open team status">
+      <span class="avatar-group" aria-hidden="true">
+        <span class="avatar" title="Nicholas" style="background:#2563eb">N</span>
+        <span class="avatar" title="Catherine" style="background:#7c3aed">C</span>
+        <span class="avatar" title="Jack" style="background:#d97706">J</span>
+      </span>
+    </button>
+    <div class="team-dropdown">
+      ${teamStatusCardHTML('compact')}
     </div>
   </div>`;
 }
@@ -1224,11 +1245,7 @@ function renderSimAdvanced() {
         <button class="btn btn-primary btn-sm" onclick="preparePresentation()">
           FINALIZE & PRESENT
         </button>
-        <div class="avatar-group">
-          <div class="avatar" title="Nicholas" style="background:#2563eb">N</div>
-          <div class="avatar" title="Catherine" style="background:#7c3aed">C</div>
-          <div class="avatar" title="Jack" style="background:#d97706">J</div>
-        </div>
+        ${teamAvatarMenuHTML()}
       </div>
     </header>
 
@@ -1248,12 +1265,12 @@ function renderSimAdvanced() {
         <button class="btn btn-outline btn-sm btn-full" onclick="createBranch()" style="margin-top:4px">
           + CREATE NEW BRANCH
         </button>
-        <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
-          <div class="branches-title">Add Component</div>
-          <button class="btn btn-outline btn-sm btn-full" onclick="openModal('add-component')" style="margin-top:8px">
-            ${svgIcon('plus',13)} Add Component
-          </button>
-        </div>
+        <button class="btn btn-outline btn-sm btn-full branch-delete-btn"
+                onclick="deleteBranch()"
+                ${branches.length <= 1 ? 'disabled' : ''}
+                title="${branches.length <= 1 ? 'Keep at least one branch' : 'Delete the active branch'}">
+          ${svgIcon('trash',13)} DELETE BRANCH
+        </button>
         <div style="font-size:.72rem;color:var(--text-muted);line-height:1.5;padding-top:8px">
           💡 Tip: Create branches to try new ideas without changing your main design.
         </div>
@@ -1841,6 +1858,7 @@ function bindGlobal() {
   document.addEventListener('click', e => {
     if (!e.target.closest('.nav-item')) closeNavDropdowns();
     if (!e.target.closest('.profile-menu')) closeProfileMenu();
+    if (!e.target.closest('.team-avatar-menu')) closeTeamMenu();
   });
 }
 
@@ -1906,6 +1924,21 @@ function handleNavCaretKey(event) {
 
 function closeNavDropdowns() {
   document.querySelectorAll('.nav-item.open').forEach(item => item.classList.remove('open'));
+}
+
+function toggleTeamMenu(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const menu = event.currentTarget.closest('.team-avatar-menu');
+  const isOpen = menu?.classList.contains('open');
+  closeTeamMenu();
+  closeNavDropdowns();
+  closeProfileMenu();
+  if (!isOpen) menu?.classList.add('open');
+}
+
+function closeTeamMenu() {
+  document.querySelectorAll('.team-avatar-menu.open').forEach(menu => menu.classList.remove('open'));
 }
 
 function toggleProfileMenu(event) {
@@ -2390,6 +2423,21 @@ function createBranch() {
   showToast(`Created ${state.branches[state.branches.length - 1].name}`, 'success');
 }
 
+function deleteBranch() {
+  if (state.branches.length <= 1) {
+    showToast('Keep at least one branch for the project.', 'warning');
+    return;
+  }
+  const index = state.branches.findIndex(b => b.id === state.branchActive);
+  if (index < 0) return;
+  const [removed] = state.branches.splice(index, 1);
+  delete state.branchSnapshots[removed.id];
+  const nextBranch = state.branches[Math.max(0, index - 1)] || state.branches[0];
+  state.branchActive = nextBranch.id;
+  navigate('simulation-advanced');
+  showToast(`${removed.name} deleted`, 'info');
+}
+
 /* ── Help ── */
 function showHelp() {
   openModal('help');
@@ -2451,6 +2499,7 @@ document.addEventListener('keydown', e => {
     closeModal();
     closeNavDropdowns();
     closeProfileMenu();
+    closeTeamMenu();
   }
   if (e.key === 'Enter' && document.getElementById('chat-inp') === document.activeElement) sendChat();
   if ((e.key === 'Delete' || e.key === 'Backspace') &&

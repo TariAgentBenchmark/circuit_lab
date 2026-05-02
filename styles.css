@@ -307,6 +307,38 @@ h4 { font-size: 1rem;    font-weight: 600; }
   margin-left: -8px;
 }
 .avatar-group .avatar:first-child { margin-left: 0; }
+.team-avatar-menu {
+  position: relative;
+}
+.avatar-group-trigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 999px;
+}
+.avatar-group-trigger:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 4px;
+}
+.team-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 90;
+  width: 280px;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity var(--transition), transform var(--transition);
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg);
+}
+.team-avatar-menu.open .team-dropdown {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
 
 /* ─── Buttons ─────────────────────────────────────────────────────────── */
 .btn {
@@ -1036,6 +1068,9 @@ h4 { font-size: 1rem;    font-weight: 600; }
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
+}
+.team-status-card.compact {
+  box-shadow: var(--shadow-lg);
 }
 .team-status-header {
   padding: 12px 14px;
@@ -1844,6 +1879,21 @@ h4 { font-size: 1rem;    font-weight: 600; }
   margin-bottom: 3px;
 }
 .branch-card-desc { font-size: .75rem; color: var(--text-muted); }
+.branch-delete-btn {
+  margin-top: -6px;
+  color: var(--danger);
+  border-color: #fecaca;
+  background: #fff;
+}
+.branch-delete-btn:hover:not(:disabled) {
+  color: white;
+  border-color: var(--danger);
+  background: var(--danger);
+}
+.branch-delete-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
 
 .peer-panel {
   width: 210px;
