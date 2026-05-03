@@ -156,7 +156,7 @@ function navTabs() {
       { label: 'Lab 02 · Buzzer Alert Circuit',  page: 'simulation', activeLab: 'lab2' },
       { label: 'Lab 03 · LED Signal Circuit',    page: 'simulation', activeLab: 'lab3' },
       { label: 'Selected Lab Task', page: 'simulation'       },
-      { label: 'Advanced Mode',  page: 'simulation-advanced' },
+      { label: 'Simulation Lab', page: 'simulation-advanced' },
       { label: 'Presentation',   page: 'presentation'        },
     ]},
     { id: 'about',   label: 'About',   page: 'about', items: [
@@ -1089,7 +1089,7 @@ function renderSimulation() {
           <div class="lab-task-badges">
             <span class="badge ${activeLab.level === 'Challenge' ? 'badge-warning' : 'badge-info'}">${activeLab.level}</span>
             <span class="badge badge-gray">${activeLab.time}</span>
-            <span class="badge badge-success">Group 4</span>
+            <span class="badge badge-success">Project Group</span>
           </div>
         </section>
 
@@ -1236,7 +1236,7 @@ function renderSimAdvanced() {
           Circuit Lab
         </div>
         <span style="color:var(--text-muted);font-size:.83rem">←</span>
-        <span style="font-size:.83rem;color:var(--text-secondary)">Project: Simple Switch Circuit / Group 4</span>
+        <span style="font-size:.83rem;color:var(--text-secondary)">Project: Simple Switch Circuit / Project Group</span>
       </div>
       <nav class="sim-header-center">
         ${navItemsHTML('lab', 'font-size:.83rem;padding:5px 12px')}
@@ -1315,7 +1315,7 @@ function renderSimAdvanced() {
         </div>
         <div class="collab-bar">
           <span class="collab-dot"></span>
-          Group 4 online &nbsp;|&nbsp; Nicholas editing &nbsp;|&nbsp; Catherine and Jack watching
+          Project Group online &nbsp;|&nbsp; Nicholas editing &nbsp;|&nbsp; Catherine and Jack watching
         </div>
         <div class="canvas-bottom-bar">
           <button class="btn btn-primary" id="run-btn" onclick="runSim()">▶ RUN SIMULATION</button>
@@ -1387,8 +1387,8 @@ function renderPresentation() {
   <div class="pres-page">
     <header class="pres-header">
       <div>
-        <div class="pres-presenter">Presenter: ${state.user.name} / Group 4</div>
-        <h2>GROUP 4 SWITCH CIRCUIT</h2>
+        <div class="pres-presenter">Presenter: ${state.user.name} / Project Group</div>
+        <h2>PROJECT GROUP SWITCH CIRCUIT</h2>
       </div>
       <button class="btn btn-outline btn-sm" style="color:white;border-color:rgba(255,255,255,.4)"
               onclick="navigate('simulation-advanced')">

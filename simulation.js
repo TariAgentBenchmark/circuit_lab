@@ -920,7 +920,7 @@ function snapshotToSVG(snapshot, options = {}) {
   }).join('');
 
   return `
-  <svg class="snapshot-circuit-svg" viewBox="${viewBox}" role="img" aria-label="Group 4 circuit design">
+  <svg class="snapshot-circuit-svg" viewBox="${viewBox}" role="img" aria-label="Project Group circuit design">
     <defs>
       <filter id="snapshot-bulb-glow-filter" x="-50%" y="-50%" width="200%" height="200%">
         <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur"/>
