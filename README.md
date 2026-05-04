@@ -4,15 +4,7 @@ A static classroom circuit-learning prototype for lessons, lab tasks, and simple
 
 ## Quick Start
 
-```bash
-python3 -m http.server 4173
-```
-
-Open:
-
-```text
-http://127.0.0.1:4173/#welcome
-```
+Download the project files, then double-click `index.html` to open it in a browser.
 
 Online demo:
 
@@ -20,7 +12,7 @@ Online demo:
 https://tariagentbenchmark.github.io/circuit_lab/#welcome
 ```
 
-No build step is required. This project runs as a static HTML/CSS/JS app.
+No installation or setup is required.
 
 ## Contact
 
