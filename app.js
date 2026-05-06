@@ -741,6 +741,10 @@ function renderDashboard() {
         <div>
           <div class="section-header">
             <h3>Continue learning</h3>
+            <button class="btn btn-ghost btn-sm dashboard-section-action"
+                    onclick="navigate('reference',{activeNavTab:'lessons'})">
+              View all lessons →
+            </button>
           </div>
           ${lessons.map(l => `
             <div class="lesson-card" onclick="navigate('lesson',{activeNavTab:'lessons'})">
@@ -761,17 +765,15 @@ function renderDashboard() {
               </div>
             </div>
           `).join('')}
-          <div class="dashboard-card-footer">
-            <button class="btn btn-ghost btn-sm dashboard-section-action"
-                    onclick="navigate('reference',{activeNavTab:'lessons'})">
-              View all lessons →
-            </button>
-          </div>
         </div>
 
         <div>
           <div class="section-header">
             <h3>Continue Lab</h3>
+            <button class="btn btn-ghost btn-sm dashboard-section-action"
+                    onclick="navigate('lab',{activeNavTab:'lab'})">
+              View all labs →
+            </button>
           </div>
           <div class="lesson-card continue-lab-card" onclick="continueActiveLab()">
             <div class="lesson-card-thumb continue-lab-thumb">
@@ -793,12 +795,6 @@ function renderDashboard() {
                 CONTINUE LAB
               </button>
             </div>
-          </div>
-          <div class="dashboard-card-footer">
-            <button class="btn btn-ghost btn-sm dashboard-section-action"
-                    onclick="navigate('lab',{activeNavTab:'lab'})">
-              Go to Lab Overview →
-            </button>
           </div>
         </div>
 

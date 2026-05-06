@@ -959,14 +959,13 @@ h4 { font-size: 1rem;    font-weight: 600; }
 }
 .lesson-progress-row .progress-bar { flex: 1; }
 .lesson-progress-pct { font-size: .78rem; color: var(--text-muted); white-space: nowrap; }
-.dashboard-card-footer {
-  display: flex;
-  justify-content: center;
-  margin-top: 10px;
-}
 .dashboard-section-action {
-  min-width: 220px;
   border-color: var(--border);
+  padding: 6px 12px;
+  flex-shrink: 0;
+}
+.section-header .dashboard-section-action {
+  margin-left: 12px;
 }
 .continue-lab-thumb {
   background: #f8fafc;
