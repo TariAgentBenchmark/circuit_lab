@@ -146,7 +146,6 @@ h4 { font-size: 1rem;    font-weight: 600; }
 .nav-link.active .nav-caret:focus-visible {
   background: rgba(255, 255, 255, .18);
 }
-.nav-item:hover .nav-caret,
 .nav-item.open .nav-caret { opacity: 1; }
 .nav-item.open .nav-caret { transform: rotate(180deg); }
 .nav-dropdown {
@@ -163,7 +162,6 @@ h4 { font-size: 1rem;    font-weight: 600; }
   display: none;
   z-index: 100;
 }
-.nav-item:hover .nav-dropdown,
 .nav-item.open .nav-dropdown { display: block; }
 .nav-dropdown-item {
   display: block;
@@ -961,6 +959,22 @@ h4 { font-size: 1rem;    font-weight: 600; }
 }
 .lesson-progress-row .progress-bar { flex: 1; }
 .lesson-progress-pct { font-size: .78rem; color: var(--text-muted); white-space: nowrap; }
+.dashboard-card-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+.dashboard-section-action {
+  min-width: 220px;
+  border-color: var(--border);
+}
+.continue-lab-thumb {
+  background: #f8fafc;
+}
+.continue-lab-thumb .circuit-mini-svg {
+  width: 96px;
+  height: auto;
+}
 
 /* Team Chat */
 .team-chat {
@@ -1548,6 +1562,13 @@ h4 { font-size: 1rem;    font-weight: 600; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.lab-start-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════
    PAGE: SIMULATION LAB
@@ -1571,6 +1592,23 @@ h4 { font-size: 1rem;    font-weight: 600; }
 .sim-header-left { display: flex; align-items: center; gap: 12px; flex: 1; }
 .sim-header-center { display: flex; align-items: center; gap: 4px; }
 .sim-header-right { display: flex; align-items: center; gap: 10px; flex: 1; justify-content: flex-end; }
+.sim-back-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.sim-back-btn:hover {
+  background: var(--bg);
+  color: var(--text);
+}
 
 .sim-project-title {
   font-size: .83rem;
@@ -1939,16 +1977,6 @@ h4 { font-size: 1rem;    font-weight: 600; }
 }
 .peer-group-name { font-size: .78rem; font-weight: 500; padding: 8px 12px; color: var(--text-secondary); }
 
-.peer-quote {
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-radius: var(--radius);
-  padding: 10px 12px;
-  font-size: .78rem;
-  color: #0c4a6e;
-  line-height: 1.5;
-  font-style: italic;
-}
 .peer-inspire-link {
   font-size: .78rem;
   color: var(--accent);
@@ -2157,6 +2185,12 @@ h4 { font-size: 1rem;    font-weight: 600; }
 .reference-header { margin-bottom: 22px; }
 .reference-header h2 { font-size: 1.6rem; margin-bottom: 4px; }
 .reference-header p { font-size: .87rem; color: var(--text-secondary); }
+.ref-progress-section {
+  margin-bottom: 22px;
+}
+.progress-widget-wide {
+  padding: 16px;
+}
 
 .reference-filters {
   display: flex;
@@ -2394,6 +2428,17 @@ h4 { font-size: 1rem;    font-weight: 600; }
   animation: slideUp .2s ease;
 }
 .modal-box.modal-wide { max-width: 640px; }
+.modal-box.modal-chat { max-width: 720px; }
+.modal-chat-body {
+  padding: 16px 20px 20px;
+}
+.modal-chat-body .team-chat {
+  max-height: min(620px, 72vh);
+}
+.modal-chat-body .chat-messages {
+  min-height: 280px;
+  max-height: 420px;
+}
 
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(16px); }
@@ -2820,7 +2865,6 @@ h4 { font-size: 1rem;    font-weight: 600; }
   }
   .peer-panel > .stats-panel,
   .peer-panel > div:first-child,
-  .peer-quote,
   .peer-inspire-link {
     grid-column: 1 / -1;
   }

@@ -13,6 +13,14 @@ const storedLoginState = (() => {
   }
 })();
 
+const storedActiveLab = (() => {
+  try {
+    return localStorage.getItem('circuitLabActiveLab') || 'lab1';
+  } catch {
+    return 'lab1';
+  }
+})();
+
 const state = {
   page:    'welcome',
   user:    { name: 'Nicholas', role: 'Student', initial: 'N' },
@@ -26,7 +34,7 @@ const state = {
   refSort: 'latest',
   addCompCategory: 'all',
   addCompSearch: '',
-  activeLab: 'lab1',
+  activeLab: storedActiveLab,
   chatMessages: [
     { from: 'Catherine', time: '4/18 12:55 PM', text: "I've added the battery. Can we test the switch next?" },
     { from: 'Jack', time: '4/18 01:00 PM', text: "I'm online now. Let's connect the bulb back to the battery." },
@@ -103,6 +111,7 @@ function navigate(page, extra = {}, options = {}) {
     saveActiveBranchSnapshot();
   }
   Object.assign(state, extra);
+  if (extra.activeLab) rememberActiveLab(extra.activeLab);
   state.page = nextPage;
   const app = document.getElementById('app');
   app.innerHTML = '';             // triggers fadeIn animation
@@ -155,9 +164,6 @@ function navTabs() {
       { label: 'Lab 01 · Simple Switch Circuit', page: 'simulation', activeLab: 'lab1' },
       { label: 'Lab 02 · Buzzer Alert Circuit',  page: 'simulation', activeLab: 'lab2' },
       { label: 'Lab 03 · LED Signal Circuit',    page: 'simulation', activeLab: 'lab3' },
-      { label: 'Selected Lab Task', page: 'simulation'       },
-      { label: 'Simulation Lab', page: 'simulation-advanced' },
-      { label: 'Presentation',   page: 'presentation'        },
     ]},
     { id: 'about',   label: 'About',   page: 'about', items: [
       { label: 'About Circuit Lab', page: 'about' },
@@ -266,29 +272,30 @@ function escapeAttr(value) {
   return escapeHTML(value);
 }
 
-function teamSidebarHTML() {
+function teamSidebarHTML({ showLabShortcut = true } = {}) {
   return `
   <div class="sidebar-section">
     <div class="sidebar-section-title">Team Status</div>
     ${teamStatusCardHTML()}
   </div>
+  ${showLabShortcut ? `
   <div class="sidebar-section">
-    <div class="sidebar-section-title">Lab Tasks</div>
+    <div class="sidebar-section-title">Lessons Review</div>
     <div class="lab-shortcut-card">
-      <div class="lab-shortcut-header">Simple Switch Circuit</div>
+      <div class="lab-shortcut-header">Switches & Circuits</div>
       <div class="lab-shortcut-diagram">
         ${miniCircuitSVG()}
       </div>
       <div class="lab-shortcut-body">
-        Review Lab 01, Lab 02, and Lab 03 task briefs before opening the advanced simulation.
+        Review the lesson notes before choosing a lab task or opening the simulation.
       </div>
       <div class="lab-shortcut-footer">
-        <button class="btn btn-ghost btn-sm btn-full" onclick="navigate('lab',{activeNavTab:'lab'})">
-          Go to Lab Overview →
+        <button class="btn btn-ghost btn-sm btn-full" onclick="navigate('reference',{activeNavTab:'lessons'})">
+          Go to Lessons →
         </button>
       </div>
     </div>
-  </div>`;
+  </div>` : ''}`;
 }
 
 function teamStatusCardHTML(extraClass = '') {
@@ -354,7 +361,7 @@ function chatHTML(containerId) {
               <span class="chat-msg-name">${m.from}</span>
               <span class="chat-msg-time">${m.time}</span>
             </div>
-            <div class="chat-msg-text">${m.text}</div>
+            <div class="chat-msg-text">${escapeHTML(m.text)}</div>
           </div>
         </div>
       `).join('')}
@@ -709,6 +716,7 @@ function heroCircuitSVG() {
 
 /* ── Dashboard ── */
 function renderDashboard() {
+  const activeLab = getActiveLab();
   const lessons = [
     { num: '04', title: 'Switches & Circuits', desc: 'Learn how switches control the flow of electricity in a circuit.', pct: 70, level: 'Beginner', time: '25 min', icon: '⚡', action: 'RESUME LESSON', page: 'lesson' },
   ];
@@ -733,7 +741,6 @@ function renderDashboard() {
         <div>
           <div class="section-header">
             <h3>Continue learning</h3>
-            <a class="form-link" onclick="navigate('reference',{activeNavTab:'reference'})">View all →</a>
           </div>
           ${lessons.map(l => `
             <div class="lesson-card" onclick="navigate('lesson',{activeNavTab:'lessons'})">
@@ -750,17 +757,56 @@ function renderDashboard() {
                   <div class="progress-bar"><div class="progress-fill green" style="width:${l.pct}%"></div></div>
                   <span class="lesson-progress-pct">${l.pct}% Complete</span>
                 </div>
-                <button class="btn btn-accent btn-sm" onclick="navigate('lesson')">${l.action}</button>
+                <button class="btn btn-accent btn-sm" onclick="event.stopPropagation();navigate('lesson',{activeNavTab:'lessons'})">${l.action}</button>
               </div>
             </div>
           `).join('')}
+          <div class="dashboard-card-footer">
+            <button class="btn btn-ghost btn-sm dashboard-section-action"
+                    onclick="navigate('reference',{activeNavTab:'lessons'})">
+              View all lessons →
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-header">
+            <h3>Continue Lab</h3>
+          </div>
+          <div class="lesson-card continue-lab-card" onclick="continueActiveLab()">
+            <div class="lesson-card-thumb continue-lab-thumb">
+              ${miniCircuitSVG()}
+            </div>
+            <div class="lesson-card-body">
+              <div class="lesson-card-meta">
+                <span class="badge badge-info">Lab ${activeLab.num}</span>
+                <span class="badge ${activeLab.level === 'Challenge' ? 'badge-warning' : 'badge-gray'}">${activeLab.level}</span>
+                <span style="font-size:.75rem;color:var(--text-muted)">${svgIcon('flask',12)} ${activeLab.time}</span>
+              </div>
+              <h4>${escapeHTML(activeLab.title)}</h4>
+              <p>${escapeHTML(activeLab.desc)}</p>
+              <div class="lesson-progress-row">
+                <div class="progress-bar"><div class="progress-fill green" style="width:45%"></div></div>
+                <span class="lesson-progress-pct">Last opened</span>
+              </div>
+              <button class="btn btn-accent btn-sm" onclick="event.stopPropagation();continueActiveLab()">
+                CONTINUE LAB
+              </button>
+            </div>
+          </div>
+          <div class="dashboard-card-footer">
+            <button class="btn btn-ghost btn-sm dashboard-section-action"
+                    onclick="navigate('lab',{activeNavTab:'lab'})">
+              Go to Lab Overview →
+            </button>
+          </div>
         </div>
 
         ${chatHTML('dashboard-chat')}
       </main>
 
       <aside class="dashboard-sidebar">
-        ${teamSidebarHTML()}
+        ${teamSidebarHTML({ showLabShortcut: false })}
       </aside>
     </div>
     ${footerHTML()}
@@ -956,6 +1002,14 @@ function getActiveLab() {
   return LABS.find(lab => lab.id === state.activeLab) || LABS[0];
 }
 
+function rememberActiveLab(id) {
+  if (!LABS.some(lab => lab.id === id)) return;
+  state.activeLab = id;
+  try {
+    localStorage.setItem('circuitLabActiveLab', id);
+  } catch {}
+}
+
 function listItemsHTML(items) {
   return items.map(item => `<li>${escapeHTML(item)}</li>`).join('');
 }
@@ -972,7 +1026,7 @@ function renderLabHome() {
       <main class="lab-main">
         <div class="lesson-header-block">
           <div class="lesson-num">Lab Overview</div>
-          <h2>Electronics Lab Tasks</h2>
+          <h2>Electronics Labs</h2>
           <p>Choose a lab to review the task, components, and hints before opening the advanced simulation.</p>
         </div>
 
@@ -1076,10 +1130,6 @@ function renderSimulation() {
     ${navHTML('lab')}
     <div class="lab-task-page-layout page-content">
       <main class="lab-task-main">
-        <button class="btn btn-ghost btn-sm lab-back-link" onclick="navigate('lab',{activeNavTab:'lab'})">
-          ${svgIcon('back', 14)} Back to Lab Overview
-        </button>
-
         <section class="lab-task-hero">
           <div>
             <div class="lesson-num">Lab ${activeLab.num}</div>
@@ -1140,9 +1190,14 @@ function renderSimulation() {
         <span>Ready for Lab ${activeLab.num}</span>
         <strong>${escapeHTML(activeLab.title)}</strong>
       </div>
-      <button class="btn btn-primary btn-xl" onclick="startSelectedLab()">
-        START SIMULATION
-      </button>
+      <div class="lab-start-actions">
+        <button class="btn btn-outline btn-xl" onclick="navigate('lab',{activeNavTab:'lab'})">
+          ${svgIcon('back', 16)} BACK TO LAB OVERVIEW
+        </button>
+        <button class="btn btn-primary btn-xl" onclick="startSelectedLab()">
+          START SIMULATION
+        </button>
+      </div>
     </div>
   </div>`;
 }
@@ -1235,13 +1290,20 @@ function renderSimAdvanced() {
           <div class="logo-icon">${svgIcon('zap',16,'white')}</div>
           Circuit Lab
         </div>
-        <span style="color:var(--text-muted);font-size:.83rem">←</span>
+        <button class="sim-back-btn"
+                onclick="navigate('simulation',{activeNavTab:'lab',activeLab:'${state.activeLab}'})"
+                aria-label="Back to selected lab task">
+          ${svgIcon('back', 14)}
+        </button>
         <span style="font-size:.83rem;color:var(--text-secondary)">Project: Simple Switch Circuit / Project Group</span>
       </div>
       <nav class="sim-header-center">
         ${navItemsHTML('lab', 'font-size:.83rem;padding:5px 12px')}
       </nav>
       <div class="sim-header-right">
+        <button class="btn btn-outline btn-sm" onclick="openModal('team-chat')">
+          ${svgIcon('message', 13)} TEAM CHAT
+        </button>
         <button class="btn btn-primary btn-sm" onclick="preparePresentation()">
           FINALIZE & PRESENT
         </button>
@@ -1359,10 +1421,6 @@ function renderSimAdvanced() {
             <div class="peer-group-name">${g.note} ›</div>
           </div>
         `).join('')}
-        <div class="peer-quote">
-          "Nicholas, close the switch and check whether the bulb is really connected back to the battery."
-          <br/><span style="font-size:.72rem;opacity:.7;margin-top:4px;display:block">— Catherine</span>
-        </div>
         <div class="peer-inspire-link">
           ${svgIcon('star',13,'#2563eb')} Explore ideas from other groups to spark new inspiration!
         </div>
@@ -1414,7 +1472,8 @@ function renderPresentation() {
           <div class="pres-progress-dots">
             ${steps.map((_,i)=>`<div class="pres-pdot ${i===state.presStep?'active':''}" onclick="presNav(${i-state.presStep})"></div>`).join('')}
           </div>
-          <button class="pres-step-btn primary" onclick="presNav(1)" ${state.presStep===steps.length-1?'disabled style="opacity:.4"':''}>
+          <button class="pres-step-btn primary"
+                  onclick="${state.presStep < steps.length-1 ? 'presNav(1)' : 'finishPresentation()'}">
             ${state.presStep < steps.length-1 ? 'NEXT: FLOW →' : 'DONE'}
           </button>
         </div>
@@ -1601,14 +1660,6 @@ function referenceCountText(lessons) {
 }
 
 function renderReference() {
-  const topicCounts = getTopicCounts();
-  const topics = [
-    { id:'all',        label:'All Topics',           count: topicCounts.all || 0 },
-    { id:'basics',     label:'Basics & DC Circuits', count: topicCounts.basics || 0 },
-    { id:'series',     label:'Series Circuits',      count: topicCounts.series || 0 },
-    { id:'parallel',   label:'Parallel Circuits',    count: topicCounts.parallel || 0 },
-    { id:'advanced',   label:'Advanced',             count: topicCounts.advanced || 0 },
-  ];
   const filtered = getFilteredLessons();
 
   return `
@@ -1620,6 +1671,18 @@ function renderReference() {
           <h2>Lessons</h2>
           <p>Track your progress and continue your learning journey.</p>
         </div>
+
+        <section class="ref-progress-section">
+          <div class="ref-side-title">My Progress</div>
+          <div class="progress-widget progress-widget-wide">
+            <div style="font-size:.8rem;color:var(--text-secondary);margin-bottom:8px">Overall Progress</div>
+            <div class="progress-widget-pct">${state.lessonProgress.percent}%</div>
+            <div class="progress-bar" style="margin-bottom:10px">
+              <div class="progress-fill green" style="width:${state.lessonProgress.percent}%"></div>
+            </div>
+            <button class="btn btn-ghost btn-sm btn-full">VIEW MY PROGRESS</button>
+          </div>
+        </section>
 
         <div class="reference-filters">
           <div class="search-box">
@@ -1665,31 +1728,6 @@ function renderReference() {
       </main>
 
       <aside class="reference-sidebar">
-        <div>
-          <div class="ref-side-title">Browse by Topic</div>
-          <div class="ref-topic-list">
-            ${topics.map(t => `
-              <div class="ref-topic-item ${state.refFilter===t.id?'active':''}"
-                   onclick="setRefTopic('${t.id}')">
-                ${t.label}
-                <span class="ref-topic-count">${t.count}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-
-        <div>
-          <div class="ref-side-title" style="margin-top:4px">My Progress</div>
-          <div class="progress-widget">
-            <div style="font-size:.8rem;color:var(--text-secondary);margin-bottom:8px">Overall Progress</div>
-            <div class="progress-widget-pct">${state.lessonProgress.percent}%</div>
-            <div class="progress-bar" style="margin-bottom:10px">
-              <div class="progress-fill green" style="width:${state.lessonProgress.percent}%"></div>
-            </div>
-            <button class="btn btn-ghost btn-sm btn-full">VIEW MY PROGRESS</button>
-          </div>
-        </div>
-
         <div>
           <div class="ref-side-title">Reference Materials</div>
           ${[
@@ -1837,6 +1875,22 @@ function openModal(type) {
       <button class="btn btn-outline" onclick="closeModal()">close</button>
     </div>`;
   }
+
+  if (type === 'team-chat') {
+    box.className = 'modal-box modal-chat';
+    box.innerHTML = `
+    <div class="modal-header">
+      <h3>${svgIcon('message', 16)} Team Chat</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body modal-chat-body">
+      ${chatHTML('advanced-chat-modal')}
+    </div>`;
+    setTimeout(() => {
+      const chatEl = document.getElementById('advanced-chat-modal');
+      if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
+    }, 0);
+  }
 }
 
 function closeModal() {
@@ -1879,10 +1933,11 @@ function bindPage(page) {
     }, 50);
   }
 
-  if (page === 'dashboard' || page === 'lesson') {
+  if (page === 'dashboard' || page === 'lesson' || page === 'simulation') {
     setTimeout(() => {
-      const chatEl = document.getElementById('dashboard-chat') || document.getElementById('lesson-chat');
-      if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
+      document.querySelectorAll('.chat-messages').forEach(chatEl => {
+        chatEl.scrollTop = chatEl.scrollHeight;
+      });
     }, 100);
   }
 
@@ -1895,7 +1950,7 @@ function bindPage(page) {
 /* ── Lab overview ── */
 function selectLab(id) {
   if (!LABS.some(lab => lab.id === id)) return;
-  state.activeLab = id;
+  rememberActiveLab(id);
   navigate('simulation', { activeNavTab: 'lab', activeLab: id });
 }
 
@@ -1903,6 +1958,12 @@ function startSelectedLab() {
   const lab = getActiveLab();
   navigate('simulation-advanced', { activeNavTab: 'lab' });
   showToast(`Starting Lab ${lab.num}: ${lab.title}`, 'info');
+}
+
+function continueActiveLab() {
+  const lab = getActiveLab();
+  rememberActiveLab(lab.id);
+  navigate('simulation', { activeNavTab: 'lab', activeLab: lab.id });
 }
 
 /* ── Auth handlers ── */
@@ -2021,21 +2082,21 @@ function sendChat() {
   const now = new Date();
   const time = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} ${now.getHours()>=12?'PM':'AM'}`;
   state.chatMessages.push({ from: state.user.name, time, text: msg });
-  const chatEl = document.getElementById('dashboard-chat') || document.getElementById('lesson-chat');
-  if (chatEl) {
-    chatEl.innerHTML += `
+  const messageHTML = `
     <div class="chat-msg">
       <div class="chat-avatar" style="background:var(--primary);color:white">${state.user.initial}</div>
       <div class="chat-msg-body">
         <div class="chat-msg-header">
-          <span class="chat-msg-name">${state.user.name}</span>
+          <span class="chat-msg-name">${escapeHTML(state.user.name)}</span>
           <span class="chat-msg-time">${time}</span>
         </div>
-        <div class="chat-msg-text">${msg}</div>
+        <div class="chat-msg-text">${escapeHTML(msg)}</div>
       </div>
     </div>`;
+  document.querySelectorAll('.chat-messages').forEach(chatEl => {
+    chatEl.innerHTML += messageHTML;
     chatEl.scrollTop = chatEl.scrollHeight;
-  }
+  });
 }
 
 /* ── Slide navigation ── */
@@ -2380,6 +2441,10 @@ function presNav(delta) {
   navigate('presentation');
 }
 
+function finishPresentation() {
+  navigate('simulation', { activeNavTab: 'lab', activeLab: state.activeLab });
+}
+
 function addPresComment() {
   const input = document.getElementById('pres-comment-inp');
   const msg = input?.value.trim();
@@ -2408,16 +2473,15 @@ function selectBranch(id) {
 
 function createBranch() {
   saveActiveBranchSnapshot();
-  const source = getActiveBranch();
   const nextNum = state.branchCounter + 1;
   const id = 'v' + nextNum;
   state.branchCounter = nextNum;
   state.branches.push({
     id,
     name: `Version ${nextNum} (Experiment)`,
-    desc: `Copied from ${source?.name || 'the active branch'} for a new circuit idea.`,
+    desc: 'Blank canvas for a new circuit idea.',
   });
-  state.branchSnapshots[id] = window.CircuitSim?.exportState ? CircuitSim.exportState() : null;
+  state.branchSnapshots[id] = null;
   state.branchActive = id;
   navigate('simulation-advanced');
   showToast(`Created ${state.branches[state.branches.length - 1].name}`, 'success');
