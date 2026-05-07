@@ -26,6 +26,7 @@ const state = {
   user:    { name: 'Nicholas', role: 'Student', initial: 'N' },
   isLoggedIn: storedLoginState,
   lessonProgress: { current: 4, percent: 70 },
+  activeLesson: '04',
   activeNavTab: 'home',
   slideIndex: 0,
   refFilter: 'all',
@@ -110,6 +111,13 @@ function navigate(page, extra = {}, options = {}) {
   if (state.page === 'simulation-advanced' && nextPage !== 'simulation-advanced') {
     saveActiveBranchSnapshot();
   }
+  if (extra.activeLesson) {
+    const nextLesson = normalizeLessonNum(extra.activeLesson);
+    if (nextLesson !== state.activeLesson && extra.slideIndex === undefined) {
+      extra.slideIndex = 0;
+    }
+    extra.activeLesson = nextLesson;
+  }
   Object.assign(state, extra);
   if (extra.activeLab) rememberActiveLab(extra.activeLab);
   state.page = nextPage;
@@ -157,6 +165,7 @@ function navTabs() {
       REF_LESSONS.map(l => ({
         label: `Lesson ${l.num} · ${l.title}`,
         page:  'lesson',
+        activeLesson: l.num,
       })).concat([{ label: 'View all lessons', page: 'reference' }])
     },
     { id: 'lab',     label: 'Lab',     page: 'lab', items: [
@@ -174,7 +183,7 @@ function navTabs() {
 function navItemsHTML(active, linkStyle = '') {
   const itemHTML = (it) => `
     <a class="nav-dropdown-item"
-       onclick="navigate('${it.page}',{activeNavTab:'${navTabForPage(it.page)}'${it.activeLab ? `,activeLab:'${it.activeLab}'` : ''}})"
+       onclick="navigate('${it.page}',{activeNavTab:'${navTabForPage(it.page)}'${it.activeLab ? `,activeLab:'${it.activeLab}'` : ''}${it.activeLesson ? `,activeLesson:'${it.activeLesson}',slideIndex:0` : ''}})"
        href="javascript:void(0)">${it.label}</a>`;
   const styleAttr = linkStyle ? ` style="${linkStyle}"` : '';
   return navTabs().map(t => `
@@ -270,6 +279,16 @@ function escapeHTML(value) {
 
 function escapeAttr(value) {
   return escapeHTML(value);
+}
+
+function normalizeLessonNum(num) {
+  const normalized = String(num || state.activeLesson || '04').padStart(2, '0');
+  return REF_LESSONS.some(l => l.num === normalized) ? normalized : '04';
+}
+
+function getActiveLesson() {
+  const num = normalizeLessonNum(state.activeLesson);
+  return REF_LESSONS.find(l => l.num === num) || REF_LESSONS[0];
 }
 
 function teamSidebarHTML({ showLabShortcut = true } = {}) {
@@ -732,8 +751,8 @@ function renderDashboard() {
             <button class="welcome-btn-primary" onclick="navigate('lab',{activeNavTab:'lab'})">
               ENTER SIMULATION LAB
             </button>
-            <button class="welcome-btn-outline" onclick="navigate('lesson',{activeNavTab:'lessons'})">
-              VIEW LESSON 04
+            <button class="welcome-btn-outline" onclick="navigate('lesson',{activeNavTab:'lessons',activeLesson:'04',slideIndex:0})">
+              VIEW LESSON
             </button>
           </div>
         </div>
@@ -747,7 +766,7 @@ function renderDashboard() {
             </button>
           </div>
           ${lessons.map(l => `
-            <div class="lesson-card" onclick="navigate('lesson',{activeNavTab:'lessons'})">
+            <div class="lesson-card" onclick="navigate('lesson',{activeNavTab:'lessons',activeLesson:'${l.num}',slideIndex:0})">
               <div class="lesson-card-thumb">${l.icon}</div>
               <div class="lesson-card-body">
                 <div class="lesson-card-meta">
@@ -761,7 +780,7 @@ function renderDashboard() {
                   <div class="progress-bar"><div class="progress-fill green" style="width:${l.pct}%"></div></div>
                   <span class="lesson-progress-pct">${l.pct}% Complete</span>
                 </div>
-                <button class="btn btn-accent btn-sm" onclick="event.stopPropagation();navigate('lesson',{activeNavTab:'lessons'})">${l.action}</button>
+                <button class="btn btn-accent btn-sm" onclick="event.stopPropagation();navigate('lesson',{activeNavTab:'lessons',activeLesson:'${l.num}',slideIndex:0})">${l.action}</button>
               </div>
             </div>
           `).join('')}
@@ -810,28 +829,55 @@ function renderDashboard() {
 }
 
 /* ── Lesson ── */
-const SLIDES = [
-  {
-    title: 'Switch Principle Demonstration',
-    content: lessonSlide1SVG,
-    note: 'A switch is a device that can open or close an electrical circuit.',
-  },
-  {
-    title: 'Current Flow Diagram',
-    content: lessonSlide2SVG,
-    note: 'When the switch is closed, current flows from the battery through the circuit.',
-  },
-  {
-    title: 'Open vs Closed Circuit',
-    content: lessonSlide3SVG,
-    note: 'An open circuit has a break — no current flows. A closed circuit allows full current.',
-  },
-  {
-    title: 'Practical Application',
-    content: lessonSlide4SVG,
-    note: 'Light switches in your home use this exact principle to control lighting.',
-  },
-];
+const LESSON_SLIDES = {
+  '01': [
+    { title: 'What Makes a Circuit?', content: lessonIntroLoopSVG, note: 'A circuit needs a source, a path, and a load.' },
+    { title: 'Closed Loop Idea', content: lessonIntroClosedLoopSVG, note: 'Electricity only flows when the path returns to the battery.' },
+    { title: 'Broken Path', content: lessonIntroBrokenLoopSVG, note: 'A gap anywhere in the loop stops the circuit.' },
+  ],
+  '02': [
+    { title: 'Component Symbols', content: lessonComponentSymbolsSVG, note: 'Circuit diagrams use symbols so everyone can read the design.' },
+    { title: 'Inputs and Outputs', content: lessonInputOutputSVG, note: 'Switches control the circuit; bulbs, LEDs, and buzzers show the result.' },
+    { title: 'Build With Blocks', content: lessonComponentBlocksSVG, note: 'Digital components can be arranged before wiring them together.' },
+  ],
+  '03': [
+    { title: 'Series Circuit Path', content: lessonSeriesPathSVG, note: 'In a series circuit, components share one path.' },
+    { title: 'One Break Stops All', content: lessonSeriesBreakSVG, note: 'If one part of a series path opens, every load turns off.' },
+    { title: 'Shared Current', content: lessonSeriesCurrentSVG, note: 'The same current passes through each series component.' },
+  ],
+  '04': [
+    { title: 'Switch Principle Demonstration', content: lessonSlide1SVG, note: 'A switch is a device that can open or close an electrical circuit.' },
+    { title: 'Current Flow Diagram', content: lessonSlide2SVG, note: 'When the switch is closed, current flows from the battery through the circuit.' },
+    { title: 'Open vs Closed Circuit', content: lessonSlide3SVG, note: 'An open circuit has a break; a closed circuit allows current to flow.' },
+    { title: 'Practical Application', content: lessonSlide4SVG, note: 'Light switches use this principle to control lighting.' },
+  ],
+  '05': [
+    { title: 'Junction Rule', content: lessonKirchhoffJunctionSVG, note: 'Current entering a junction equals current leaving it.' },
+    { title: 'Loop Rule', content: lessonKirchhoffLoopSVG, note: 'Voltage gains and drops balance around a complete loop.' },
+    { title: 'Check the Numbers', content: lessonKirchhoffBalanceSVG, note: 'Kirchhoff rules help verify whether a circuit model is reasonable.' },
+  ],
+  '06': [
+    { title: 'Capacitor Stores Charge', content: lessonCapacitorSVG, note: 'A capacitor stores electrical charge for a short time.' },
+    { title: 'Inductor Stores Magnetic Energy', content: lessonInductorSVG, note: 'An inductor resists sudden changes in current.' },
+    { title: 'Changing Over Time', content: lessonCapIndTimeSVG, note: 'Capacitors and inductors are useful when circuits change over time.' },
+  ],
+};
+
+function getLessonSlides(num) {
+  return LESSON_SLIDES[normalizeLessonNum(num)] || LESSON_SLIDES['04'];
+}
+
+function getLessonSummary(lesson) {
+  const summaries = {
+    '01': 'Start by identifying the power source, complete path, and output load in a simple circuit.',
+    '02': 'Review the symbols Nicholas will use when building a circuit with digital components.',
+    '03': 'See why a series design has only one route for current to travel.',
+    '04': 'Use switches to compare open and closed circuits before starting the lab project.',
+    '05': 'Use simple current and voltage checks to reason about whether a circuit balances.',
+    '06': 'Compare storage components that change how a circuit behaves over time.',
+  };
+  return summaries[lesson.num] || lesson.desc;
+}
 
 function lessonSlide1SVG() {
   return `
@@ -941,6 +987,211 @@ function lessonSlide4SVG() {
       The light switch in your room works exactly like this — it opens and closes a circuit to control the light.
     </p>
   </div>`;
+}
+
+function lessonCardDiagram(label, svgMarkup, text) {
+  return `
+  <div class="slide-diagram">
+    <div class="lesson-visual-card">
+      <div class="lesson-visual-label">${label}</div>
+      ${svgMarkup}
+    </div>
+    <p class="lesson-visual-caption">${text}</p>
+  </div>`;
+}
+
+function lessonIntroLoopSVG() {
+  return lessonCardDiagram('Circuit Basics', `
+    <svg width="300" height="150" viewBox="0 0 300 150">
+      <rect x="28" y="55" width="46" height="44" rx="5" fill="white" stroke="#0f172a" stroke-width="1.7"/>
+      <text x="51" y="117" font-size="11" fill="#64748b" text-anchor="middle">source</text>
+      <circle cx="232" cy="77" r="26" fill="#fef9c3" stroke="#0f172a" stroke-width="1.7"/>
+      <text x="232" y="117" font-size="11" fill="#64748b" text-anchor="middle">load</text>
+      <path d="M74 77 H206 M232 51 V28 H51 V55 M232 103 V126 H51 V99" fill="none" stroke="#334155" stroke-width="2.3"/>
+      <path d="M105 73 l12 4 -12 4 M156 73 l12 4 -12 4" fill="none" stroke="#2563eb" stroke-width="2"/>
+      <line x1="38" y1="77" x2="48" y2="77" stroke="#0f172a" stroke-width="2"/>
+      <line x1="54" y1="64" x2="54" y2="90" stroke="#0f172a" stroke-width="3"/>
+      <line x1="62" y1="69" x2="62" y2="85" stroke="#0f172a" stroke-width="1.8"/>
+      <line x1="218" y1="63" x2="246" y2="91" stroke="#0f172a" stroke-width="1.5"/>
+      <line x1="246" y1="63" x2="218" y2="91" stroke="#0f172a" stroke-width="1.5"/>
+    </svg>
+  `, 'A complete circuit connects the source, path, and load in one loop.');
+}
+
+function lessonIntroClosedLoopSVG() {
+  return lessonCardDiagram('Closed Loop', `
+    <svg width="300" height="150" viewBox="0 0 300 150">
+      <rect x="40" y="55" width="44" height="44" rx="5" fill="white" stroke="#0f172a" stroke-width="1.7"/>
+      <circle cx="220" cy="77" r="24" fill="#fef9c3" stroke="#0f172a" stroke-width="1.7"/>
+      <path d="M84 77 H130 V35 H220 V53 M220 101 V118 H62 V99" fill="none" stroke="#059669" stroke-width="3"/>
+      <line x1="130" y1="35" x2="154" y2="35" stroke="#059669" stroke-width="3"/>
+      <circle cx="130" cy="35" r="4" fill="#059669"/><circle cx="154" cy="35" r="4" fill="#059669"/>
+      <text x="150" y="26" font-size="11" fill="#059669" text-anchor="middle">closed</text>
+      <text x="150" y="137" font-size="12" fill="#059669" text-anchor="middle">current can flow</text>
+    </svg>
+  `, 'When the loop is closed, electrical energy can reach the load.');
+}
+
+function lessonIntroBrokenLoopSVG() {
+  return lessonCardDiagram('Open Loop', `
+    <svg width="300" height="150" viewBox="0 0 300 150">
+      <rect x="42" y="55" width="44" height="44" rx="5" fill="white" stroke="#0f172a" stroke-width="1.7"/>
+      <circle cx="220" cy="77" r="24" fill="white" stroke="#94a3b8" stroke-width="1.7"/>
+      <path d="M86 77 H128 V35 H220 V53 M220 101 V118 H64 V99" fill="none" stroke="#94a3b8" stroke-width="2.3" stroke-dasharray="7 5"/>
+      <line x1="128" y1="35" x2="150" y2="18" stroke="#ef4444" stroke-width="3"/>
+      <circle cx="128" cy="35" r="4" fill="#ef4444"/><circle cx="154" cy="35" r="4" fill="#ef4444"/>
+      <text x="151" y="61" font-size="12" fill="#ef4444" text-anchor="middle">gap</text>
+    </svg>
+  `, 'A missing wire, open switch, or loose terminal breaks the path.');
+}
+
+function lessonComponentSymbolsSVG() {
+  return lessonCardDiagram('Common Symbols', `
+    <svg width="310" height="150" viewBox="0 0 310 150">
+      <g transform="translate(28 36)"><line x1="0" y1="28" x2="26" y2="28" stroke="#0f172a" stroke-width="2"/><line x1="26" y1="10" x2="26" y2="46" stroke="#0f172a" stroke-width="3"/><line x1="38" y1="17" x2="38" y2="39" stroke="#0f172a" stroke-width="2"/><line x1="38" y1="28" x2="64" y2="28" stroke="#0f172a" stroke-width="2"/><text x="32" y="76" font-size="11" fill="#64748b" text-anchor="middle">Battery</text></g>
+      <g transform="translate(122 36)"><line x1="0" y1="28" x2="22" y2="28" stroke="#0f172a" stroke-width="2"/><circle cx="22" cy="28" r="4" fill="#0f172a"/><line x1="22" y1="28" x2="58" y2="12" stroke="#0f172a" stroke-width="2"/><circle cx="68" cy="28" r="4" fill="#0f172a"/><line x1="68" y1="28" x2="90" y2="28" stroke="#0f172a" stroke-width="2"/><text x="45" y="76" font-size="11" fill="#64748b" text-anchor="middle">Switch</text></g>
+      <g transform="translate(238 35)"><circle cx="30" cy="30" r="23" fill="white" stroke="#0f172a" stroke-width="2"/><line x1="16" y1="16" x2="44" y2="44" stroke="#0f172a" stroke-width="1.5"/><line x1="44" y1="16" x2="16" y2="44" stroke="#0f172a" stroke-width="1.5"/><text x="30" y="77" font-size="11" fill="#64748b" text-anchor="middle">Bulb</text></g>
+    </svg>
+  `, 'Symbols keep diagrams compact while still naming each component clearly.');
+}
+
+function lessonInputOutputSVG() {
+  return lessonCardDiagram('Control and Result', `
+    <svg width="310" height="150" viewBox="0 0 310 150">
+      <rect x="36" y="42" width="90" height="56" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+      <text x="81" y="66" font-size="13" fill="#1d4ed8" text-anchor="middle" font-weight="700">Input</text>
+      <text x="81" y="84" font-size="11" fill="#64748b" text-anchor="middle">Switch</text>
+      <path d="M132 70 H178" stroke="#334155" stroke-width="2.3"/><path d="M168 63 l11 7 -11 7" fill="none" stroke="#334155" stroke-width="2.3"/>
+      <rect x="184" y="34" width="92" height="72" rx="8" fill="#fef9c3" stroke="#ca8a04"/>
+      <text x="230" y="62" font-size="13" fill="#92400e" text-anchor="middle" font-weight="700">Output</text>
+      <text x="230" y="82" font-size="11" fill="#64748b" text-anchor="middle">Light / Sound</text>
+    </svg>
+  `, 'Inputs control the path. Outputs show whether the circuit is working.');
+}
+
+function lessonComponentBlocksSVG() {
+  return lessonCardDiagram('Digital Components', `
+    <svg width="310" height="150" viewBox="0 0 310 150">
+      ${['Battery','Switch','LED','Buzzer'].map((label, i) => {
+        const x = 24 + i * 72;
+        return `<g transform="translate(${x} 40)"><rect width="58" height="50" rx="8" fill="white" stroke="#cbd5e1"/><text x="29" y="30" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="700">${label}</text><circle cx="14" cy="50" r="4" fill="#2563eb"/><circle cx="44" cy="50" r="4" fill="#2563eb"/></g>`;
+      }).join('')}
+      <path d="M68 106 C92 122 116 122 140 106 M140 106 C164 90 188 90 212 106" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="5 4"/>
+    </svg>
+  `, 'Before connecting wires, students can identify what each component does.');
+}
+
+function lessonSeriesPathSVG() {
+  return lessonCardDiagram('One Path', `
+    <svg width="310" height="150" viewBox="0 0 310 150">
+      <path d="M42 75 H96 H154 H210 H264" fill="none" stroke="#334155" stroke-width="2.5"/>
+      <rect x="30" y="55" width="42" height="40" rx="5" fill="white" stroke="#0f172a" stroke-width="1.7"/>
+      <rect x="102" y="55" width="42" height="40" rx="5" fill="#f8fafc" stroke="#0f172a"/>
+      <circle cx="166" cy="75" r="20" fill="#fef9c3" stroke="#0f172a"/>
+      <circle cx="230" cy="75" r="20" fill="#fef9c3" stroke="#0f172a"/>
+      <text x="166" y="116" font-size="11" fill="#64748b" text-anchor="middle">Load 1</text>
+      <text x="230" y="116" font-size="11" fill="#64748b" text-anchor="middle">Load 2</text>
+    </svg>
+  `, 'Every component sits on the same route from one end of the battery to the other.');
+}
+
+function lessonSeriesBreakSVG() {
+  return lessonCardDiagram('Series Break', `
+    <svg width="310" height="150" viewBox="0 0 310 150">
+      <path d="M42 75 H104 M146 75 H264" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="8 5"/>
+      <line x1="104" y1="75" x2="136" y2="54" stroke="#ef4444" stroke-width="3"/>
+      <circle cx="104" cy="75" r="5" fill="#ef4444"/><circle cx="146" cy="75" r="5" fill="#ef4444"/>
+      <circle cx="180" cy="75" r="20" fill="white" stroke="#94a3b8"/>
+      <circle cx="238" cy="75" r="20" fill="white" stroke="#94a3b8"/>
+      <text x="155" y="124" font-size="12" fill="#ef4444" text-anchor="middle">all outputs off</text>
+    </svg>
+  `, 'One open switch or missing wire stops the entire series circuit.');
+}
+
+function lessonSeriesCurrentSVG() {
+  return lessonCardDiagram('Shared Current', `
+    <svg width="310" height="150" viewBox="0 0 310 150">
+      <path d="M48 75 H262" fill="none" stroke="#2563eb" stroke-width="3"/>
+      <path d="M86 67 l12 8 -12 8 M150 67 l12 8 -12 8 M214 67 l12 8 -12 8" fill="none" stroke="#1d4ed8" stroke-width="2"/>
+      <rect x="28" y="55" width="42" height="40" rx="5" fill="white" stroke="#0f172a"/>
+      <rect x="124" y="57" width="44" height="36" rx="4" fill="#fef3c7" stroke="#0f172a"/>
+      <rect x="208" y="57" width="44" height="36" rx="4" fill="#fef3c7" stroke="#0f172a"/>
+      <text x="146" y="115" font-size="11" fill="#64748b" text-anchor="middle">same current</text>
+    </svg>
+  `, 'Series components share the same current because there is only one path.');
+}
+
+function lessonKirchhoffJunctionSVG() {
+  return lessonCardDiagram('Current at a Junction', `
+    <svg width="310" height="150" viewBox="0 0 310 150">
+      <circle cx="155" cy="75" r="6" fill="#0f172a"/>
+      <path d="M45 75 H155 M155 75 L252 35 M155 75 L252 115" stroke="#334155" stroke-width="2.5" fill="none"/>
+      <text x="82" y="65" font-size="13" fill="#2563eb">3 A in</text>
+      <text x="226" y="28" font-size="13" fill="#059669">1 A out</text>
+      <text x="225" y="132" font-size="13" fill="#059669">2 A out</text>
+    </svg>
+  `, 'The current entering a junction is split across outgoing branches.');
+}
+
+function lessonKirchhoffLoopSVG() {
+  return lessonCardDiagram('Voltage Around a Loop', `
+    <svg width="310" height="150" viewBox="0 0 310 150">
+      <rect x="68" y="38" width="174" height="78" rx="8" fill="none" stroke="#334155" stroke-width="2.3"/>
+      <rect x="52" y="59" width="34" height="34" rx="4" fill="white" stroke="#0f172a"/>
+      <rect x="128" y="26" width="52" height="24" rx="4" fill="#fef3c7" stroke="#92400e"/>
+      <rect x="128" y="104" width="52" height="24" rx="4" fill="#fef3c7" stroke="#92400e"/>
+      <text x="69" y="108" font-size="12" fill="#2563eb" text-anchor="middle">+9V</text>
+      <text x="154" y="22" font-size="12" fill="#92400e" text-anchor="middle">-4V</text>
+      <text x="154" y="144" font-size="12" fill="#92400e" text-anchor="middle">-5V</text>
+    </svg>
+  `, 'Voltage gains and drops balance when you go around one complete loop.');
+}
+
+function lessonKirchhoffBalanceSVG() {
+  return lessonCardDiagram('Balanced Check', `
+    <svg width="310" height="150" viewBox="0 0 310 150">
+      <rect x="40" y="42" width="230" height="66" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+      <text x="155" y="70" font-size="18" fill="#0f172a" text-anchor="middle" font-weight="700">+9V - 4V - 5V = 0</text>
+      <text x="155" y="94" font-size="13" fill="#059669" text-anchor="middle">loop is balanced</text>
+    </svg>
+  `, 'A simple equation can confirm whether the circuit values make sense.');
+}
+
+function lessonCapacitorSVG() {
+  return lessonCardDiagram('Capacitor', `
+    <svg width="310" height="150" viewBox="0 0 310 150">
+      <line x1="44" y1="76" x2="126" y2="76" stroke="#334155" stroke-width="2.5"/>
+      <line x1="126" y1="42" x2="126" y2="110" stroke="#0f172a" stroke-width="4"/>
+      <line x1="184" y1="42" x2="184" y2="110" stroke="#0f172a" stroke-width="4"/>
+      <line x1="184" y1="76" x2="266" y2="76" stroke="#334155" stroke-width="2.5"/>
+      <circle cx="100" cy="55" r="5" fill="#2563eb"/><circle cx="106" cy="96" r="5" fill="#2563eb"/><circle cx="210" cy="55" r="5" fill="#ef4444"/><circle cx="216" cy="96" r="5" fill="#ef4444"/>
+      <text x="155" y="132" font-size="12" fill="#64748b" text-anchor="middle">stores charge between plates</text>
+    </svg>
+  `, 'Two plates store separated charge and can release it later.');
+}
+
+function lessonInductorSVG() {
+  return lessonCardDiagram('Inductor', `
+    <svg width="310" height="150" viewBox="0 0 310 150">
+      <line x1="42" y1="76" x2="84" y2="76" stroke="#334155" stroke-width="2.5"/>
+      <path d="M84 76 C92 42 116 42 124 76 C132 110 156 110 164 76 C172 42 196 42 204 76 C212 110 236 110 244 76" fill="none" stroke="#0f172a" stroke-width="3"/>
+      <line x1="244" y1="76" x2="268" y2="76" stroke="#334155" stroke-width="2.5"/>
+      <path d="M126 42 C154 20 196 28 214 52" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="5 4"/>
+      <text x="155" y="130" font-size="12" fill="#64748b" text-anchor="middle">resists sudden current changes</text>
+    </svg>
+  `, 'A coil stores energy in a magnetic field as current changes.');
+}
+
+function lessonCapIndTimeSVG() {
+  return lessonCardDiagram('Time Response', `
+    <svg width="310" height="150" viewBox="0 0 310 150">
+      <line x1="50" y1="118" x2="260" y2="118" stroke="#94a3b8"/><line x1="50" y1="118" x2="50" y2="32" stroke="#94a3b8"/>
+      <path d="M50 112 C88 100 104 70 136 48 C166 30 210 30 260 30" fill="none" stroke="#2563eb" stroke-width="3"/>
+      <path d="M50 34 C88 46 108 74 136 92 C166 111 210 116 260 117" fill="none" stroke="#f59e0b" stroke-width="3"/>
+      <text x="240" y="28" font-size="11" fill="#2563eb">capacitor</text>
+      <text x="238" y="108" font-size="11" fill="#f59e0b">inductor</text>
+    </svg>
+  `, 'These components make circuits behave differently immediately after switching.');
 }
 
 const LABS = [
@@ -1053,7 +1304,9 @@ function renderLabHome() {
 }
 
 function renderLesson() {
-  const slide = SLIDES[state.slideIndex] || SLIDES[0];
+  const lesson = getActiveLesson();
+  const slides = getLessonSlides(lesson.num);
+  const slide = slides[state.slideIndex] || slides[0];
   return `
   <div class="page-wrapper">
     <header class="app-header">
@@ -1071,12 +1324,13 @@ function renderLesson() {
       </div>
     </header>
 
-    <div class="lesson-page-layout page-content">
+    <div class="lesson-page-layout lesson-page-layout-single page-content">
       <main class="lesson-main">
         <div class="lesson-header-block">
-          <div class="lesson-num">Lesson 04</div>
-          <h2>Switches & Circuits</h2>
-          <p>"${state.user.name}, today we will learn how electrical energy flows through practical experiments."</p>
+          <div class="lesson-num">Lesson ${lesson.num}</div>
+          <h2>${escapeHTML(lesson.title)}</h2>
+          <p>${escapeHTML(lesson.desc)}</p>
+          <p class="lesson-summary-line">${escapeHTML(getLessonSummary(lesson))}</p>
         </div>
 
         <div class="slide-viewer">
@@ -1088,26 +1342,20 @@ function renderLesson() {
             <button class="slide-arrow" id="prev-slide"
               onclick="changeSlide(-1)" ${state.slideIndex===0?'disabled style="opacity:.35;cursor:not-allowed"':''}>◀</button>
             <div class="slide-dots">
-              ${SLIDES.map((_, i) => `
+              ${slides.map((_, i) => `
                 <div class="slide-dot ${i===state.slideIndex?'active':''}"
                      onclick="changeSlide(${i - state.slideIndex})"></div>
               `).join('')}
             </div>
             <button class="slide-arrow" id="next-slide"
-              onclick="changeSlide(1)" ${state.slideIndex===SLIDES.length-1?'disabled style="opacity:.35;cursor:not-allowed"':''}>▶</button>
+              onclick="changeSlide(1)" ${state.slideIndex===slides.length-1?'disabled style="opacity:.35;cursor:not-allowed"':''}>▶</button>
           </div>
         </div>
 
         <div style="padding:10px 0;background:var(--accent-light);border-radius:var(--radius);padding:12px 16px;font-size:.83rem;color:var(--accent)">
           📚 ${slide.note}
         </div>
-
-        ${chatHTML('lesson-chat')}
       </main>
-
-      <aside class="dashboard-sidebar">
-        ${teamSidebarHTML()}
-      </aside>
     </div>
 
     <div class="lesson-enter-lab">
@@ -1546,7 +1794,7 @@ const REF_LESSONS = [
   { num:'01', title:'Introduction to Circuits',  desc:'Learn the basics of electric circuits and how they work.',             level:'Beginner',     duration:'12:45', pct:100, topic:'basics',   color:'#0ea5e9', bg:'#e0f2fe' },
   { num:'02', title:'Circuit Components',        desc:'Explore common circuit components and their symbols.',                level:'Beginner',     duration:'15:30', pct:75,  topic:'basics',   color:'#06b6d4', bg:'#cffafe' },
   { num:'03', title:'Series Circuits',           desc:'Understand how components work in series circuits.',                  level:'Intermediate', duration:'18:20', pct:50,  topic:'series',   color:'#8b5cf6', bg:'#ede9fe' },
-  { num:'04', title:'Parallel Circuits',         desc:'Learn about parallel circuits and current flow.',                     level:'Intermediate', duration:'14:55', pct:0,   topic:'parallel', color:'#6366f1', bg:'#e0e7ff' },
+  { num:'04', title:'Switches & Circuits',       desc:'Learn how switches control the flow of electricity in a circuit.',    level:'Beginner',     duration:'25:00', pct:70,  topic:'basics',   color:'#2563eb', bg:'#dbeafe' },
   { num:'05', title:"Kirchhoff's Laws",          desc:"Apply Kirchhoff's voltage and current laws to circuits.",             level:'Advanced',     duration:'22:10', pct:0,   topic:'advanced', color:'#f59e0b', bg:'#fef3c7' },
   { num:'06', title:'Capacitors and Inductors',  desc:'Understand capacitors, inductors, and their applications.',          level:'Advanced',     duration:'28:05', pct:0,   topic:'advanced', color:'#ef4444', bg:'#fee2e2' },
 ];
@@ -1556,7 +1804,7 @@ function lessonCoverHTML(l) {
   const levelColor = l.level === 'Beginner' ? '#10b981' : l.level === 'Intermediate' ? '#6366f1' : '#f59e0b';
   return `
   <div class="lesson-cover" style="background:${l.bg};border-right:1px solid var(--border)"
-       onclick="navigate('lesson',{activeNavTab:'lessons'})">
+       onclick="navigate('lesson',{activeNavTab:'lessons',activeLesson:'${l.num}',slideIndex:0})">
     <!-- decorative circuit lines -->
     <svg width="100%" height="100%" viewBox="0 0 130 90" style="position:absolute;inset:0;opacity:.18">
       <line x1="10" y1="45" x2="40" y2="45" stroke="${l.color}" stroke-width="2"/>
@@ -1613,7 +1861,8 @@ function getFilteredLessons() {
 
 function referenceLessonCardHTML(l) {
   return `
-  <div class="ref-lesson-card" style="align-items:stretch;padding:0;overflow:hidden">
+  <div class="ref-lesson-card" style="align-items:stretch;padding:0;overflow:hidden"
+       onclick="navigate('lesson',{activeNavTab:'lessons',activeLesson:'${l.num}',slideIndex:0})">
     ${lessonCoverHTML(l)}
     <div class="ref-lesson-body" style="padding:14px 16px">
       <div class="ref-lesson-meta">
@@ -1636,7 +1885,7 @@ function referenceLessonCardHTML(l) {
     </div>
     <div class="ref-lesson-action" style="padding:0 14px;align-self:center;flex-shrink:0">
       <button class="btn ${l.pct===100?'btn-outline':l.pct>0?'btn-accent':'btn-primary'} btn-sm"
-              onclick="event.stopPropagation();navigate('lesson',{activeNavTab:'lessons'})">
+              onclick="event.stopPropagation();navigate('lesson',{activeNavTab:'lessons',activeLesson:'${l.num}',slideIndex:0})">
         ${l.pct===100?'REVIEW LESSON':l.pct>0?'CONTINUE LESSON':'START LESSON'}
       </button>
     </div>
@@ -1745,11 +1994,11 @@ function renderReference() {
         <div>
           <div class="ref-side-title">Recently Viewed</div>
           ${[
-            {name:'Lesson 02: Circuit Components', time:'Today, 10:30 AM'},
-            {name:'Lesson 03: Series Circuits',    time:'Today, 9:00 AM'},
-            {name:'Lesson 05: Series Circuits',    time:'May 10, 2026'},
+            {num:'02', name:'Lesson 02: Circuit Components', time:'Today, 10:30 AM'},
+            {num:'03', name:'Lesson 03: Series Circuits',    time:'Today, 9:00 AM'},
+            {num:'05', name:"Lesson 05: Kirchhoff's Laws",   time:'May 10, 2026'},
           ].map(h => `
-            <div class="ref-history-item" onclick="navigate('lesson')">
+            <div class="ref-history-item" onclick="navigate('lesson',{activeNavTab:'lessons',activeLesson:'${h.num}',slideIndex:0})">
               <div class="ref-history-name">${h.name}</div>
               <div class="ref-history-meta">${h.time}</div>
             </div>
@@ -2097,8 +2346,9 @@ function sendChat() {
 
 /* ── Slide navigation ── */
 function changeSlide(delta) {
+  const slides = getLessonSlides(state.activeLesson);
   const newIdx = state.slideIndex + delta;
-  if (newIdx < 0 || newIdx >= SLIDES.length) return;
+  if (newIdx < 0 || newIdx >= slides.length) return;
   state.slideIndex = newIdx;
   navigate('lesson', { activeNavTab: 'lessons' });
 }
