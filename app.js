@@ -751,7 +751,7 @@ function renderDashboard() {
             <button class="welcome-btn-primary" onclick="navigate('lab',{activeNavTab:'lab'})">
               ENTER SIMULATION LAB
             </button>
-            <button class="welcome-btn-outline" onclick="navigate('lesson',{activeNavTab:'lessons',activeLesson:'04',slideIndex:0})">
+            <button class="welcome-btn-outline" onclick="navigate('reference',{activeNavTab:'lessons'})">
               VIEW LESSON
             </button>
           </div>
